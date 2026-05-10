@@ -1,21 +1,22 @@
-# NEMH 后端 API — systemd 单元（示例）
+# NEMH 后端 API — systemd 单元
 #
-# 安装步骤（在服务器上，按实际路径修改 WorkingDirectory）：
-#   sudo cp deploy/nemh-api.service /etc/systemd/system/nemh-api.service
-#   sudo nano /etc/systemd/system/nemh-api.service   # 核对 User、WorkingDirectory、ExecStart
+# 安装（在服务器上，按需改路径与 User）：
+#   sudo bash deploy/install-nemh-api-systemd.sh
+# 或手动：
+#   sudo mkdir -p /var/log/nemh-api && sudo chown ubuntu:ubuntu /var/log/nemh-api
+#   sudo cp deploy/nemh-api.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now nemh-api
 #
-# 日志（写入 journal，任意 SSH 终端可查）：
-#   journalctl -u nemh-api -f          # 实时跟踪
-#   journalctl -u nemh-api -n 200      # 最近 200 行
-#   journalctl -u nemh-api --since today
+# 日志：
+#   应用输出：tail -f /var/log/nemh-api/out.log  与  tail -f /var/log/nemh-api/err.log
+#   服务启停：journalctl -u nemh-api -f
 #
-# 端口 531 < 1024 为特权端口，非 root 需 AmbientCapabilities（已写）。
-# 若不想授予该能力，把 Environment=PORT 改为 >=1024（如 30531），并删掉 AmbientCapabilities/CapabilityBoundingSet 两行。
+# 若改用 journald 承接应用 stdout（不用文件），将 StandardOutput/StandardError
+# 改为 journal，并注释掉 append 两行，同时可设 SyslogIdentifier=nemh-api
 
 [Unit]
-Description=NEMH API (Express + SQLite)
+Description=NEMH API (Express, PORT=8003)
 After=network-online.target
 Wants=network-online.target
 
@@ -24,28 +25,22 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 
-# 按你服务器上仓库实际路径修改（须为绝对路径；为 monorepo 根目录）
-WorkingDirectory=/home/ubuntu/var/www/nemh-app/NEMH
-
-# 使用 apt 的 node/npm，避免 PATH 里 /usr/local 的旧 Node
-Environment=PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin
-ExecStart=/usr/bin/npm run start -w @nodejs/server
+# 修改为服务器上本仓库的 server 目录绝对路径
+WorkingDirectory=/home/ubuntu/var/www/nemh-app/NEMH/server
 
 Environment=NODE_ENV=production
-Environment=PORT=531
+Environment=PORT=8003
 
-# 日志进入 systemd journal（默认），便于 journalctl 查看
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=nemh-api
-
-# 特权端口 531 绑定所需（仅当 PORT<1024 且 User 非 root 时需要）
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# 使用系统 Node（与 apt / NodeSource 一致）；若仅用 nvm，请改为该 node 绝对路径
+ExecStart=/usr/bin/node src/index.js
 
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=30
+TimeoutStopSec=20
+
+# 应用日志（需目录存在且 User 可写）
+StandardOutput=append:/var/log/nemh-api/out.log
+StandardError=append:/var/log/nemh-api/err.log
 
 [Install]
 WantedBy=multi-user.target
