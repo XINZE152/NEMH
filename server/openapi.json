@@ -1,0 +1,1342 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "新能源材料进销存 API",
+    "description": "进销存后端接口：用户与库房、收货定价、对外报价、入库审核、出库与 FIFO、库存报表与预警等。默认账号见服务启动日志。详细说明见仓库内 `server/API接口文档.md`。\n\n**鉴权**：除「健康检查」「登录」「自助注册」外，请求头需 `Authorization: Bearer <JWT>`。角色 `statistics`（统计部）与 `warehouse`（库房）权限不同，见各接口说明。\n\n**Swagger**：展开接口后可用 **Try it out** 调试；**Curl** 区会按当前参数生成命令；**Example Value** 为示例请求/响应体。",
+    "version": "1.0.0"
+  },
+  "servers": [{ "url": "/", "description": "当前服务（与浏览器同源）" }],
+  "tags": [
+    { "name": "系统", "description": "健康检查等" },
+    { "name": "认证", "description": "登录获取 JWT" },
+    { "name": "用户管理", "description": "仅 statistics" },
+    { "name": "库房", "description": "已登录均可" },
+    { "name": "品种与收货定价", "description": "查询全员；增删改多为 warehouse" },
+    { "name": "对外报价", "description": "发布仅 statistics；库房可读" },
+    { "name": "入库单", "description": "创建 warehouse；审核 statistics" },
+    { "name": "出库与磅单", "description": "主要为 warehouse" },
+    { "name": "库存与预警", "description": "报表与汇总" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "登录接口返回的 token"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "未登录或 Token 无效",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorBody" },
+            "example": { "error": "未登录或缺少 Token" }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "无权限",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorBody" },
+            "example": { "error": "仅统计部可操作" }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "参数错误",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorBody" },
+            "example": { "error": "请输入用户名和密码" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorBody": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "username": { "type": "string" },
+          "role": { "type": "string", "enum": ["warehouse", "statistics"] },
+          "created_at": { "type": "string" },
+          "updated_at": { "type": "string" }
+        }
+      },
+      "Warehouse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "address": { "type": "string" },
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["系统"],
+        "summary": "健康检查",
+        "responses": {
+          "200": {
+            "description": "服务正常",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
+                "example": { "ok": true }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/login": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "管理员登录",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": { "type": "string", "example": "admin" },
+                  "password": { "type": "string", "example": "admin123" }
+                }
+              },
+              "example": { "username": "admin", "password": "admin123" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功，返回 JWT",
+            "content": {
+              "application/json": {
+                "example": {
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "user": { "id": 1, "username": "admin", "role": "statistics" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": {
+            "description": "用户名或密码错误",
+            "content": {
+              "application/json": {
+                "example": { "error": "用户名或密码错误" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/register": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "自助注册（库房角色）",
+        "description": "无需 Token。新建用户 `role` 固定为 `warehouse`。若设置环境变量 `DISABLE_PUBLIC_REGISTER=1` 则返回 403。请求体中的 `role` 字段（若有）会被忽略。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": { "type": "string", "example": "warehouse_new" },
+                  "password": { "type": "string", "example": "pass1234" }
+                }
+              },
+              "example": { "username": "warehouse_new", "password": "pass1234" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建用户",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": {
+            "description": "用户名已存在",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorBody" },
+                "example": { "error": "用户名已存在" }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorBody" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["用户管理"],
+        "summary": "用户列表",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "用户数组",
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "id": 1,
+                    "username": "admin",
+                    "role": "statistics",
+                    "created_at": "2026-04-24 08:00:00",
+                    "updated_at": "2026-04-24 08:00:00"
+                  }
+                ]
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["用户管理"],
+        "summary": "创建用户",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": { "username": "ck01", "password": "pass1234", "role": "warehouse" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 2,
+                  "username": "ck01",
+                  "role": "warehouse",
+                  "created_at": "2026-04-24 09:00:00",
+                  "updated_at": "2026-04-24 09:00:00"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": {
+            "description": "用户名已存在",
+            "content": {
+              "application/json": { "example": { "error": "用户名已存在" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}": {
+      "put": {
+        "tags": ["用户管理"],
+        "summary": "更新用户",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": { "password": "newpass5678", "role": "warehouse" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的用户",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 2,
+                  "username": "ck01",
+                  "role": "warehouse",
+                  "created_at": "2026-04-24 09:00:00",
+                  "updated_at": "2026-04-24 10:00:00"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "用户不存在",
+            "content": {
+              "application/json": { "example": { "error": "用户不存在" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["用户管理"],
+        "summary": "删除用户",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "已删除，无响应体" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/warehouses": {
+      "get": {
+        "tags": ["库房"],
+        "summary": "库房列表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "按代码/名称/地址模糊搜索"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "库房列表",
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "id": 1,
+                    "code": "DEF-001",
+                    "name": "默认库房",
+                    "address": "",
+                    "createdAt": "2026-04-24 08:00:00",
+                    "updatedAt": "2026-04-24 08:00:00"
+                  }
+                ]
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["库房"],
+        "summary": "创建库房",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": { "code": "WH-002", "name": "二号库", "address": "某市某区" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 2,
+                  "code": "WH-002",
+                  "name": "二号库",
+                  "address": "某市某区",
+                  "createdAt": "2026-04-24 10:00:00",
+                  "updatedAt": "2026-04-24 10:00:00"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/warehouses/{id}": {
+      "get": {
+        "tags": ["库房"],
+        "summary": "库房详情",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "单条库房",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "code": "DEF-001",
+                  "name": "默认库房",
+                  "address": "",
+                  "createdAt": "2026-04-24 08:00:00",
+                  "updatedAt": "2026-04-24 08:00:00"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "库房不存在" } }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["库房"],
+        "summary": "更新库房",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": { "example": { "name": "默认库房（改名）", "address": "新地址" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "code": "DEF-001",
+                  "name": "默认库房（改名）",
+                  "address": "新地址",
+                  "createdAt": "2026-04-24 08:00:00",
+                  "updatedAt": "2026-04-24 11:00:00"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "delete": {
+        "tags": ["库房"],
+        "summary": "删除库房",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "已删除" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/materials": {
+      "get": {
+        "tags": ["品种与收货定价"],
+        "summary": "品种列表（只读）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "品种及最新价摘要",
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "id": 1,
+                    "code": "MAT-001",
+                    "name": "示例品种",
+                    "description": "",
+                    "createdAt": "2026-04-24 08:00:00",
+                    "latestPurchaseUnitPrice": 3200,
+                    "latestUnifiedQuote": 3500
+                  }
+                ]
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/purchase-prices/latest-by-material/{materialId}": {
+      "get": {
+        "tags": ["品种与收货定价"],
+        "summary": "某品种当前最新收货定价",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "materialId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "latest 可能为 null",
+            "content": {
+              "application/json": {
+                "example": {
+                  "latest": {
+                    "id": 10,
+                    "materialId": 1,
+                    "unitPrice": 3200,
+                    "enteredAt": "2026-04-24T02:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/purchase-prices": {
+      "get": {
+        "tags": ["品种与收货定价"],
+        "summary": "收货定价分页列表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "keyword", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果",
+            "content": {
+              "application/json": {
+                "example": {
+                  "prices": [
+                    {
+                      "id": 1,
+                      "materialId": 1,
+                      "materialCode": "MAT-001",
+                      "materialName": "示例品种",
+                      "unitPrice": 3200,
+                      "enteredAt": "2026-04-24T02:00:00.000Z",
+                      "marketPriceProof": "https://example.com/m.jpg",
+                      "receivePriceProof": "https://example.com/r.jpg",
+                      "description": null,
+                      "createdBy": 1,
+                      "creatorUsername": "admin",
+                      "pricingNo": "MAT-001",
+                      "priceProof": "https://example.com/m.jpg"
+                    }
+                  ],
+                  "total": 1,
+                  "page": 1,
+                  "pageSize": 10
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["品种与收货定价"],
+        "summary": "创建单条收货定价（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "materialId": 1,
+                "unitPrice": 3200,
+                "enteredAt": "2026-04-24T02:00:00.000Z",
+                "marketPriceProof": "https://example.com/market.jpg",
+                "receivePriceProof": "https://example.com/receive.jpg",
+                "description": "备注可选"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 5,
+                  "materialId": 1,
+                  "materialCode": "MAT-001",
+                  "unitPrice": 3200,
+                  "enteredAt": "2026-04-24T02:00:00.000Z",
+                  "marketPriceProof": "https://example.com/market.jpg",
+                  "receivePriceProof": "https://example.com/receive.jpg"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/purchase-prices/batch": {
+      "post": {
+        "tags": ["品种与收货定价"],
+        "summary": "批量创建收货定价（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "enteredAt": "2026-04-24T02:00:00.000Z",
+                "marketPriceProof": "https://example.com/m.jpg",
+                "receivePriceProof": "https://example.com/r.jpg",
+                "lines": [
+                  { "materialId": 1, "unitPrice": 3200 },
+                  { "materialId": 2, "price": 3100 }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "批量创建结果",
+            "content": {
+              "application/json": {
+                "example": { "count": 2, "prices": [{ "id": 6 }, { "id": 7 }] }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/purchase-prices/{id}": {
+      "get": {
+        "tags": ["品种与收货定价"],
+        "summary": "收货定价详情",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "单条记录",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "materialId": 1,
+                  "materialCode": "MAT-001",
+                  "unitPrice": 3200,
+                  "marketPriceProof": "https://example.com/m.jpg",
+                  "receivePriceProof": "https://example.com/r.jpg"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "记录不存在" } }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["品种与收货定价"],
+        "summary": "更新收货定价（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": { "example": { "unitPrice": 3250 } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后",
+            "content": {
+              "application/json": {
+                "example": { "id": 1, "unitPrice": 3250, "materialId": 1 }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "delete": {
+        "tags": ["品种与收货定价"],
+        "summary": "删除收货定价（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "已删除" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/sale-prices": {
+      "get": {
+        "tags": ["对外报价"],
+        "summary": "对外报价分页列表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "prices": [
+                    {
+                      "id": 1,
+                      "materialId": 1,
+                      "materialCode": "MAT-001",
+                      "unitPrice": 3500,
+                      "publishedAt": "2026-04-24T00:00:00.000Z",
+                      "quotePrice": 3500,
+                      "publishDate": "2026-04-24T00:00:00.000Z",
+                      "quoteType": "unified_market",
+                      "material": { "id": 1, "code": "MAT-001", "name": "示例品种" }
+                    }
+                  ],
+                  "total": 1,
+                  "page": 1,
+                  "pageSize": 10
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["对外报价"],
+        "summary": "发布对外报价（统计部）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "materialId": 1,
+                "unitPrice": 3500,
+                "publishedAt": "2026-04-24T00:00:00.000Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已发布",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 3,
+                  "materialId": 1,
+                  "unitPrice": 3500,
+                  "publishedAt": "2026-04-24T00:00:00.000Z",
+                  "quoteType": "unified_market"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/sale-prices/latest/{materialId}": {
+      "get": {
+        "tags": ["对外报价"],
+        "summary": "某品种最新对外报价",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "materialId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "latest 可为 null",
+            "content": {
+              "application/json": {
+                "example": {
+                  "latest": {
+                    "id": 1,
+                    "materialId": 1,
+                    "unitPrice": 3500,
+                    "publishedAt": "2026-04-24T00:00:00.000Z",
+                    "quoteType": "unified_market"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/sale-prices/{id}": {
+      "get": {
+        "tags": ["对外报价"],
+        "summary": "对外报价详情",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "单条",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "materialId": 1,
+                  "unitPrice": 3500,
+                  "quoteType": "unified_market"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "记录不存在" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/warehouse/unified-market-quotes": {
+      "get": {
+        "tags": ["对外报价"],
+        "summary": "库房端：对外报价列表（与 admin 列表一致）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "同 GET /api/admin/sale-prices",
+            "content": {
+              "application/json": {
+                "example": { "prices": [], "total": 0, "page": 1, "pageSize": 10 }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/warehouse/unified-market-quotes/latest/{materialId}": {
+      "get": {
+        "tags": ["对外报价"],
+        "summary": "库房端：某品种最新对外报价",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "materialId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "同 admin latest",
+            "content": {
+              "application/json": {
+                "example": { "latest": null }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/inbound-orders": {
+      "get": {
+        "tags": ["入库单"],
+        "summary": "入库单分页列表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          {
+            "name": "auditStatus",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["pending", "approved", "rejected"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "orders": [
+                    {
+                      "id": 1,
+                      "orderNo": "RK-20260424-0001",
+                      "warehouseId": 1,
+                      "materialId": 1,
+                      "weight": 10.5,
+                      "unitPrice": 3200,
+                      "totalAmount": 33600,
+                      "auditStatus": "pending",
+                      "auditStatusText": "待审核",
+                      "inboundPhoto": "https://example.com/in.jpg"
+                    }
+                  ],
+                  "total": 1,
+                  "page": 1,
+                  "pageSize": 10
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["入库单"],
+        "summary": "创建入库单（库房；单价须与最新收货定价一致）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "warehouseId": 1,
+                "materialId": 1,
+                "weight": 10.5,
+                "unitPrice": 3200,
+                "photo": "https://example.com/inbound.jpg",
+                "inboundAt": "2026-04-24T03:00:00.000Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建（待审核）",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "orderNo": "RK-20260424-0001",
+                  "auditStatus": "pending",
+                  "auditStatusText": "待审核",
+                  "weight": 10.5,
+                  "unitPrice": 3200
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "校验失败（如单价不一致）",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "录入单价必须与当前品种最新收货定价一致，请核对后重试",
+                  "latestPurchaseUnitPrice": 3200
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/inbound-orders/{id}": {
+      "get": {
+        "tags": ["入库单"],
+        "summary": "入库单详情",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "含 latestPurchaseUnitPrice",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "orderNo": "RK-20260424-0001",
+                  "auditStatus": "pending",
+                  "latestPurchaseUnitPrice": 3200,
+                  "latestUnifiedQuote": 3500
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "入库单不存在" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/inbound-orders/{id}/approve": {
+      "put": {
+        "tags": ["入库单"],
+        "summary": "审核通过（统计部）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "更新后入库单",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "auditStatus": "approved",
+                  "auditStatusText": "已审核待出库"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/inbound-orders/{id}/reject": {
+      "put": {
+        "tags": ["入库单"],
+        "summary": "审核驳回（统计部）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": { "rejectReason": "照片不清晰" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "驳回后",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "auditStatus": "rejected",
+                  "auditStatusText": "审核驳回",
+                  "rejectReason": "照片不清晰"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/weighbridge-slip/parse": {
+      "post": {
+        "tags": ["出库与磅单"],
+        "summary": "解析磅单 OCR 文本（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "imageUrl": "https://example.com/pound.jpg",
+                "ocrText": "品名 废钢 净重 25.66 吨"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "解析结果（与 weighbridgeParse 一致）",
+            "content": {
+              "application/json": {
+                "example": {
+                  "imageUrl": "https://example.com/pound.jpg",
+                  "recognized": true,
+                  "suggestedMaterialId": 1,
+                  "suggestedWeight": 25.66,
+                  "numbersFound": [25.66, 30],
+                  "candidates": [
+                    { "materialId": 1, "code": "MAT-001", "name": "示例品种", "matchBy": "name" }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/outbound-orders": {
+      "get": {
+        "tags": ["出库与磅单"],
+        "summary": "出库单分页列表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "completed"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "orders": [
+                    {
+                      "id": 1,
+                      "orderNo": "CK-20260424-0001",
+                      "warehouseId": 1,
+                      "materialId": 1,
+                      "plannedWeight": 5,
+                      "unitPrice": 3500,
+                      "status": "pending"
+                    }
+                  ],
+                  "total": 1,
+                  "page": 1,
+                  "pageSize": 10
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["出库与磅单"],
+        "summary": "创建出库单（库房，FIFO 子行自动分配）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "warehouseId": 1,
+                "materialId": 1,
+                "plannedWeight": 5,
+                "unitPrice": 3500
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "含 fifoLines",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "orderNo": "CK-20260424-0001",
+                  "plannedWeight": 5,
+                  "status": "pending",
+                  "fifoLines": [
+                    {
+                      "inboundOrderId": 1,
+                      "plannedWeight": 5,
+                      "lineNo": 1,
+                      "subOrderNo": "CK-20260424-0001-S001"
+                    }
+                  ],
+                  "defaultOutboundUnitPrice": 3500
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "库存不足等",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "可出库库存不足（先进先出），请减少预出库重量或先完成入库审核",
+                  "shortfall": 2.5
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/outbound-orders/{id}": {
+      "get": {
+        "tags": ["出库与磅单"],
+        "summary": "出库单详情",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "含 fifoLines、defaultOutboundUnitPrice",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "orderNo": "CK-20260424-0001",
+                  "fifoLines": [],
+                  "defaultOutboundUnitPrice": 3500
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "出库单不存在" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["出库与磅单"],
+        "summary": "删除待完成出库单（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "已删除" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/outbound-orders/{id}/complete": {
+      "put": {
+        "tags": ["出库与磅单"],
+        "summary": "确认实际出库（库房）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "actualWeight": 4.98,
+                "weighbridgePhoto": "https://example.com/bridge.jpg"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "完成后详情",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "status": "completed",
+                  "actualWeight": 4.98,
+                  "weighbridgePhoto": "https://example.com/bridge.jpg",
+                  "fifoLines": []
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/admin/inbound-summary-alerts": {
+      "get": {
+        "tags": ["库存与预警"],
+        "summary": "入库汇总预警",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "basis", "in": "query", "schema": { "type": "string", "enum": ["actual", "combined"] } },
+          { "name": "thresholdTon", "in": "query", "schema": { "type": "number" } },
+          { "name": "onlyThirtyTonReminder", "in": "query", "schema": { "type": "string", "enum": ["1", "true"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "汇总项",
+            "content": {
+              "application/json": {
+                "example": {
+                  "basis": "combined",
+                  "defaultBasis": "combined",
+                  "thresholdTon": 30,
+                  "onlyThirtyTonReminder": false,
+                  "hasInboundTonReminder": false,
+                  "items": []
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/inventory/warehouse-stock-report": {
+      "get": {
+        "tags": ["库存与预警"],
+        "summary": "库房库存报表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
+          { "name": "warehouseId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          {
+            "name": "inventoryStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending_audit",
+                "pending_outbound",
+                "outbounding",
+                "partial_outbound",
+                "fully_outbound"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页行",
+            "content": {
+              "application/json": {
+                "example": {
+                  "rows": [
+                    {
+                      "warehouse": { "id": 1, "code": "DEF-001", "name": "默认库房" },
+                      "inboundOrderNo": "RK-20260424-0001",
+                      "inboundOrderId": 1,
+                      "material": { "id": 1, "code": "MAT-001", "name": "示例品种" },
+                      "inboundWeight": 10.5,
+                      "inventoryStatus": "pending_audit",
+                      "inventoryStatusLabel": "待审核",
+                      "outboundOrderNo": null,
+                      "subOrderNo": null,
+                      "outboundWeight": null
+                    }
+                  ],
+                  "total": 1,
+                  "page": 1,
+                  "pageSize": 20
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  }
+}

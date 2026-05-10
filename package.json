@@ -1,0 +1,21 @@
+{
+  "name": "nodejs-template-monorepo",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "workspaces": [
+    "server",
+    "client",
+    "admin",
+    "inventory-web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client,admin -c blue,green,magenta \"npm run dev -w @nodejs/server\" \"npm run dev -w @nodejs/client\" \"npm run dev -w @nodejs/admin\"",
+    "dev:inventory": "concurrently -n server,web -c blue,cyan \"npm run dev -w @nodejs/server\" \"npm run dev -w @nodejs/inventory-web\"",
+    "build": "npm run build -w @nodejs/server && npm run build -w @nodejs/client && npm run build -w @nodejs/admin && npm run build -w @nodejs/inventory-web"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

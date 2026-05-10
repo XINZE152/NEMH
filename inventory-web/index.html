@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电动/新能源材料进销存管理系统</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="login-page" class="page active">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="logo">
+                    <i class="fas fa-battery-full"></i>
+                    <h1 class="app-brand-title">
+                        <span class="app-brand-line">新能源材料</span>
+                        <span class="app-brand-line">进销存系统</span>
+                    </h1>
+                </div>
+                <p class="subtitle">精准成本核算 · 实时库存可视 · 规范协同流程</p>
+            </div>
+            
+            <div class="login-form">
+                <h2>用户登录</h2>
+                <div class="form-group">
+                    <label for="username"><i class="fas fa-user"></i> 用户名</label>
+                    <input type="text" id="username" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label for="password"><i class="fas fa-lock"></i> 密码</label>
+                    <input type="password" id="password" placeholder="请输入密码">
+                </div>
+                <button id="login-btn" class="btn-primary">
+                    <i class="fas fa-sign-in-alt"></i> 登录
+                </button>
+                
+                <div class="demo-accounts">
+                    <h3>登录说明</h3>
+                    <p class="subtitle" style="font-size:13px;margin:0 0 10px;">对接后端仅可使用<strong>数据库中已存在</strong>的用户。空库默认 <code>admin / admin123</code> 为<strong>统计部</strong>（入库审核、对外报价等）；<strong>收货定价 / 入库 / 出库</strong>须使用 <code>role=warehouse</code> 的库房账号，请用 admin 登录后在用户管理里新建库房用户。</p>
+                    <div class="account-list">
+                        <div class="account-item" data-username="admin" data-password="admin123">
+                            <strong>默认管理员（后端）</strong>
+                            <span>admin / admin123</span>
+                        </div>
+                        <div class="account-item offline-demo-account" data-username="statistics" data-password="stat123">
+                            <strong>演示（仅离线模式）</strong>
+                            <span>statistics / stat123</span>
+                        </div>
+                        <div class="account-item offline-demo-account" data-username="warehouse1" data-password="ware123">
+                            <strong>演示（仅离线模式）</strong>
+                            <span>warehouse1 / ware123</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="login-footer">
+                <p>© 2023 电动/新能源材料进销存管理系统 V1.0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用页面 -->
+    <div id="app-page" class="page">
+        <!-- 顶部导航栏 -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i class="fas fa-battery-full"></i>
+                    <h2 class="app-brand-title">
+                        <span class="app-brand-line">新能源材料</span>
+                        <span class="app-brand-line">进销存系统</span>
+                    </h2>
+                </div>
+            </div>
+            <div class="header-center">
+                <nav class="main-nav">
+                    <a href="#" class="nav-item" data-page="dashboard"><i class="fas fa-home"></i> 首页</a>
+                    <a href="#" class="nav-item" data-page="warehouse"><i class="fas fa-building"></i> 库房管理</a>
+                    <a href="#" class="nav-item" data-page="pricing"><i class="fas fa-tag"></i> 收货定价</a>
+                    <a href="#" class="nav-item" data-page="inbound"><i class="fas fa-inbox"></i> 收货入库</a>
+                    <a href="#" class="nav-item" data-page="review"><i class="fas fa-check-circle"></i> 入库审核</a>
+                    <a href="#" class="nav-item" data-page="quotation"><i class="fas fa-chart-line"></i> 对外报价</a>
+                    <a href="#" class="nav-item" data-page="outbound"><i class="fas fa-truck"></i> 出库管理</a>
+                    <a href="#" class="nav-item" data-page="inventory"><i class="fas fa-warehouse"></i> 库存查询</a>
+                    <a href="#" class="nav-item" data-page="reports"><i class="fas fa-file-alt"></i> 报表中心</a>
+                </nav>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="current-user">未登录</span>
+                    <span id="user-role" class="role-badge">未分配</span>
+                </div>
+                <button id="logout-btn" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </button>
+            </div>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main class="app-main">
+            <!-- 首页 -->
+            <div id="dashboard-page" class="content-page active">
+                <div class="page-header">
+                    <h1><i class="fas fa-home"></i> 系统首页</h1>
+                    <p>欢迎使用电动/新能源材料进销存管理系统</p>
+                </div>
+                
+                <div class="dashboard-stats">
+                    <div class="stat-card stat-card-pricing-wide">
+                        <div class="stat-icon" style="background-color: #4CAF50;">
+                            <i class="fas fa-tags"></i>
+                        </div>
+                        <div class="stat-content stat-content-pricing-panel">
+                            <h3>各品种最新收货定价与对外报价</h3>
+                            <div id="dashboard-latest-prices" class="dashboard-latest-prices"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: #2196F3;">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>待审核入库</h3>
+                            <p id="pending-review-count">0</p>
+                            <span>单</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: #FF9800;">
+                            <i class="fas fa-warehouse"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>库存预警</h3>
+                            <p id="warning-count">0</p>
+                            <span>项</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: #9C27B0;">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>本月毛利</h3>
+                            <p id="month-profit">¥0</p>
+                            <span>元</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-content">
+                    <div class="dashboard-section">
+                        <h3><i class="fas fa-bell"></i> 系统公告</h3>
+                        <div class="notice-board">
+                            <div class="notice-item">
+                                <div class="notice-icon">
+                                    <i class="fas fa-info-circle"></i>
+                                </div>
+                                <div class="notice-content">
+                                    <h4>系统上线通知</h4>
+                                    <p>电动/新能源材料进销存管理系统已正式上线，请各位用户按照角色权限使用相应功能。</p>
+                                    <span class="notice-time">2023-10-27</span>
+                                </div>
+                            </div>
+                            <div class="notice-item">
+                                <div class="notice-icon">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div class="notice-content">
+                                    <h4>库存预警提醒</h4>
+                                    <p>请及时关注库存预警信息，避免库存积压或短缺影响业务。</p>
+                                    <span class="notice-time">2023-10-26</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-section">
+                        <h3><i class="fas fa-history"></i> 最近操作</h3>
+                        <div class="recent-actions">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>操作类型</th>
+                                        <th>详情</th>
+                                        <th>操作人</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-actions-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 收货定价页面 -->
+            <div id="pricing-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-tag"></i> 收货定价管理</h1>
+                    <p>记录采购谈判确定的价格，作为后续入库单的成本价依据</p>
+                </div>
+                
+                <div class="page-actions">
+                    <button id="add-pricing-btn" class="btn-primary">
+                        <i class="fas fa-plus"></i> 新增定价
+                    </button>
+                    <div class="search-box">
+                        <input type="text" id="pricing-search" placeholder="搜索品种...">
+                        <i class="fas fa-search"></i>
+                    </div>
+                </div>
+                
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>定价编号</th>
+                                <th>品种</th>
+                                <th>单价（元/吨）</th>
+                                <th>录入时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pricing-list">
+                            <!-- 动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 收货入库页面 -->
+            <div id="inbound-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-inbox"></i> 收货入库管理</h1>
+                    <p>货物到达库房后，创建入库单记录实物信息</p>
+                </div>
+                
+                <div class="page-actions">
+                    <button id="add-inbound-btn" class="btn-primary">
+                        <i class="fas fa-plus"></i> 新建入库单
+                    </button>
+                    <div class="filter-group">
+                        <select id="inbound-status-filter">
+                            <option value="">全部状态</option>
+                            <option value="pending">待审核</option>
+                            <option value="approved">已审核待出库</option>
+                            <option value="outbounding">出库中</option>
+                            <option value="partial">部分已出库</option>
+                            <option value="completed">全部已出库</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>入库单号</th>
+                                <th>库房</th>
+                                <th>品种</th>
+                                <th>重量（吨）</th>
+                                <th>入库单价</th>
+                                <th>状态</th>
+                                <th>出库单价</th>
+                                <th>入库时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inbound-list">
+                            <!-- 动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 库房管理页面 -->
+            <div id="warehouse-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-building"></i> 库房管理</h1>
+                    <p>维护库房基础信息，入库、出库与库存统计将关联此处数据</p>
+                </div>
+                <div class="page-actions">
+                    <button type="button" id="add-warehouse-btn" class="btn-primary">
+                        <i class="fas fa-plus"></i> 新建库房
+                    </button>
+                </div>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>库房代码</th>
+                                <th>库房名称</th>
+                                <th>地址</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warehouse-list">
+                            <!-- 动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 入库审核页面 -->
+            <div id="review-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-check-circle"></i> 入库审核管理</h1>
+                    <p>统计部人员对库房提交的入库单进行真实性、合规性审核</p>
+                </div>
+                
+                <div class="tab-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="pending">待审核</button>
+                        <button class="tab-btn" data-tab="approved">已审核</button>
+                        <button class="tab-btn" data-tab="rejected">已驳回</button>
+                    </div>
+                    
+                    <div class="tab-content active" id="pending-tab">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>入库单号</th>
+                                        <th>库房</th>
+                                        <th>品种</th>
+                                        <th>重量（吨）</th>
+                                        <th>入库单价</th>
+                                        <th>入库总价</th>
+                                        <th>入库时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pending-review-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="approved-tab">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>入库单号</th>
+                                        <th>库房</th>
+                                        <th>品种</th>
+                                        <th>重量（吨）</th>
+                                        <th>入库单价</th>
+                                        <th>入库总价</th>
+                                        <th>入库时间</th>
+                                        <th>状态</th>
+                                        <th>审核人</th>
+                                        <th>审核时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="approved-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="rejected-tab">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>入库单号</th>
+                                        <th>库房</th>
+                                        <th>品种</th>
+                                        <th>重量（吨）</th>
+                                        <th>入库单价</th>
+                                        <th>入库总价</th>
+                                        <th>入库时间</th>
+                                        <th>驳回原因</th>
+                                        <th>驳回时间</th>
+                                        <th>操作人</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rejected-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 对外报价页面 -->
+            <div id="quotation-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-chart-line"></i> 对外报价管理</h1>
+                    <p>维护公司对外统一的销售指导价，供出库时参考</p>
+                </div>
+                
+                <div class="quotation-container">
+                    <div class="quotation-board">
+                        <h3><i class="fas fa-chart-bar"></i> 报价看板</h3>
+                        <div class="quotation-cards" id="quotation-cards">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+                    
+                    <div class="quotation-history">
+                        <h3><i class="fas fa-history"></i> 历史报价</h3>
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>品种</th>
+                                        <th>报价（元/吨）</th>
+                                        <th>发布时间</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quotation-history-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 出库管理页面 -->
+            <div id="outbound-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-truck"></i> 出库管理</h1>
+                    <p>管理货物出库计划与执行，包含预出库和实际出库</p>
+                </div>
+                
+                <div class="tab-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="pre-outbound">预出库计划</button>
+                        <button class="tab-btn" data-tab="actual-outbound">实际出库</button>
+                        <button class="tab-btn" data-tab="outbound-history">出库历史</button>
+                    </div>
+                    
+                    <div class="tab-content active" id="pre-outbound-tab">
+                        <div class="page-actions">
+                            <button id="add-pre-outbound-btn" class="btn-primary">
+                                <i class="fas fa-plus"></i> 创建预出库计划
+                            </button>
+                        </div>
+                        
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>出库单号</th>
+                                        <th>品种</th>
+                                        <th>预出库重量（吨）</th>
+                                        <th>出库价格</th>
+                                        <th>状态</th>
+                                        <th>创建时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pre-outbound-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="actual-outbound-tab">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>出库单号</th>
+                                        <th>品种</th>
+                                        <th>预出库重量</th>
+                                        <th>实际出库重量</th>
+                                        <th>出库价格</th>
+                                        <th>状态</th>
+                                        <th>磅单</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="actual-outbound-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="outbound-history-tab">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>出库单号</th>
+                                        <th>品种</th>
+                                        <th>实际出库重量</th>
+                                        <th>出库价格</th>
+                                        <th>成本单价</th>
+                                        <th>预估毛利</th>
+                                        <th>出库时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="outbound-history-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 库存查询页面 -->
+            <div id="inventory-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-warehouse"></i> 库存查询与预警</h1>
+                    <p>实时库存可视，提供多维度库存报表与预警</p>
+                </div>
+                
+                <div class="tab-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="inventory-warning">库存预警</button>
+                        <button class="tab-btn" data-tab="inventory-report">库存报表</button>
+                    </div>
+                    
+                    <div class="tab-content active" id="inventory-warning-tab">
+                        <div class="warning-controls">
+                            <div class="warning-threshold">
+                                <label>预警阈值：</label>
+                                <input type="number" id="warning-threshold" value="30" min="1" max="1000">
+                                <span>吨</span>
+                            </div>
+                            <div class="deduction-mode">
+                                <label>扣减逻辑：</label>
+                                <select id="deduction-mode">
+                                    <option value="both">按（实际出库+预出库）计算</option>
+                                    <option value="actual">仅按实际出库计算</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="data-table-container">
+                            <table class="data-table warning-table">
+                                <thead>
+                                    <tr>
+                                        <th>库房</th>
+                                        <th>品种</th>
+                                        <th>总入库重量</th>
+                                        <th>待出库重量</th>
+                                        <th>预出库重量</th>
+                                        <th>扣减重量</th>
+                                        <th>可用库存</th>
+                                        <th>预警状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="warning-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="inventory-report-tab">
+                        <div class="filter-group">
+                            <select id="report-warehouse-filter">
+                                <option value="">全部库房</option>
+                            </select>
+                            <select id="report-material-filter">
+                                <option value="">全部品种</option>
+                            </select>
+                            <select id="report-status-filter">
+                                <option value="">全部状态</option>
+                                <option value="pending">待审核</option>
+                                <option value="approved">已审核待出库</option>
+                                <option value="outbounding">出库中</option>
+                                <option value="partial">部分已出库</option>
+                                <option value="completed">全部已出库</option>
+                            </select>
+                            <button id="search-report-btn" class="btn-primary">
+                                <i class="fas fa-search"></i> 查询
+                            </button>
+                        </div>
+                        
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>库房</th>
+                                        <th>入库单号</th>
+                                        <th>品种</th>
+                                        <th>入库重量</th>
+                                        <th>库存状态</th>
+                                        <th>出库单价</th>
+                                        <th>出库单号</th>
+                                        <th>出库子单号</th>
+                                        <th>出库重量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventory-report-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 报表中心页面 -->
+            <div id="reports-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-file-alt"></i> 报表中心</h1>
+                    <p>基于已完成的实际出库记录，估算每笔出库业务的毛利</p>
+                </div>
+                
+                <div class="filter-group">
+                    <input type="date" id="report-start-date">
+                    <span>至</span>
+                    <input type="date" id="report-end-date">
+                    <select id="report-material-select">
+                        <option value="">全部品种</option>
+                    </select>
+                    <select id="report-warehouse-select">
+                        <option value="">全部库房</option>
+                    </select>
+                    <button type="button" id="generate-report-btn" class="btn-primary">
+                        <i class="fas fa-calculator"></i> 生成报表
+                    </button>
+                    <button type="button" id="export-report-btn" class="btn-secondary">
+                        <i class="fas fa-download"></i> 导出Excel
+                    </button>
+                </div>
+                
+                <div class="data-table-container">
+                    <table class="data-table profit-table" id="profit-report-table">
+                        <thead>
+                            <tr>
+                                <th>品种代码</th>
+                                <th>品种名称</th>
+                                <th>销售重量（吨）</th>
+                                <th>销售收入（元）</th>
+                                <th>销售成本（元）</th>
+                                <th>销售利润（元）</th>
+                                <th>利润率（%）</th>
+                            </tr>
+                        </thead>
+                        <tbody id="profit-report-list">
+                            <!-- 动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="report-summary">
+                    <div class="summary-card">
+                        <h4>总销售金额</h4>
+                        <p id="total-sales">¥0</p>
+                    </div>
+                    <div class="summary-card">
+                        <h4>总成本金额</h4>
+                        <p id="total-cost">¥0</p>
+                    </div>
+                    <div class="summary-card">
+                        <h4>总预估毛利</h4>
+                        <p id="total-profit">¥0</p>
+                    </div>
+                    <div class="summary-card">
+                        <h4>平均毛利率</h4>
+                        <p id="avg-profit-rate">0%</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 模态框容器 -->
+        <div id="modal-container">
+            <!-- 新增定价模态框 -->
+            <div id="add-pricing-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-tag"></i> 新增定价</h3>
+                        <button class="close-btn" onclick="closeModal('add-pricing-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="pricing-material">品种</label>
+                            <select id="pricing-material">
+                                <option value="">选择品种</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pricing-price">单价（元/吨）</label>
+                            <input type="number" id="pricing-price" placeholder="请输入单价">
+                        </div>
+                        <div class="form-group">
+                            <label for="pricing-date">录入时间</label>
+                            <input type="datetime-local" id="pricing-date" step="60">
+                        </div>
+                        <div class="form-group">
+                            <label>上传凭证（可选）</label>
+                            <p class="form-hint pricing-upload-hint">每类可多选图片添加；最多 20 张/类，单张不超过 5MB。可不传凭证。</p>
+                            <div class="image-upload-group">
+                                <div class="image-upload-item">
+                                    <label>行情凭证</label>
+                                    <input type="file" id="pricing-market-image" accept="image/*" multiple style="display: none;">
+                                    <button type="button" class="image-upload-btn" onclick="document.getElementById('pricing-market-image').click()">
+                                        <i class="fas fa-upload"></i> 添加行情凭证
+                                    </button>
+                                    <div id="pricing-market-previews" class="pricing-multi-previews"></div>
+                                </div>
+                                <div class="image-upload-item">
+                                    <label>收货价格凭证</label>
+                                    <input type="file" id="pricing-self-image" accept="image/*" multiple style="display: none;">
+                                    <button type="button" class="image-upload-btn" onclick="document.getElementById('pricing-self-image').click()">
+                                        <i class="fas fa-upload"></i> 添加收货凭证
+                                    </button>
+                                    <div id="pricing-self-previews" class="pricing-multi-previews"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('add-pricing-modal')">取消</button>
+                        <button type="button" class="btn-primary" onclick="savePricing()">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 查看定价凭证模态框 -->
+            <div id="view-images-modal" class="modal view-images-modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-eye"></i> 查看凭证</h3>
+                        <button type="button" class="close-btn" onclick="closeModal('view-images-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="view-images-container">
+                            <div class="view-image-item">
+                                <h4>行情凭证</h4>
+                                <div id="view-market-image-container"></div>
+                            </div>
+                            <div class="view-image-item">
+                                <h4>收货价格凭证</h4>
+                                <div id="view-self-image-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" onclick="closeModal('view-images-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新增入库单模态框 -->
+            <div id="add-inbound-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-inbox"></i> 新建入库单</h3>
+                        <button class="close-btn" onclick="closeModal('add-inbound-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="inbound-material">品种</label>
+                            <select id="inbound-material">
+                                <option value="">选择品种</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="inbound-warehouse">库房</label>
+                            <select id="inbound-warehouse">
+                                <option value="">选择库房</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="inbound-weight">重量（吨）</label>
+                            <input type="number" id="inbound-weight" placeholder="请输入重量" oninput="calculateInboundTotal()">
+                        </div>
+                        <div class="form-group">
+                            <label for="inbound-unit-price">入库单价（元/吨）</label>
+                            <input type="number" id="inbound-unit-price" placeholder="请输入单价" oninput="calculateInboundTotal()">
+                            <p id="inbound-unit-price-hint" class="form-hint" style="margin:6px 0 0;font-size:13px;"></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="inbound-date">入库时间</label>
+                            <input type="datetime-local" id="inbound-date" step="60">
+                        </div>
+                        <div class="form-group">
+                            <label>入库总价</label>
+                            <div class="total-price" id="inbound-total-price">¥0</div>
+                        </div>
+                        <div class="form-group">
+                            <label>上传入库照片（可选）</label>
+                            <p class="form-hint pricing-upload-hint">可多选添加，最多 20 张，单张不超过 5MB。</p>
+                            <input type="file" id="inbound-image" accept="image/*" multiple style="display: none;">
+                            <button type="button" class="image-upload-btn" onclick="document.getElementById('inbound-image').click()">
+                                <i class="fas fa-upload"></i> 添加入库照片
+                            </button>
+                            <div id="inbound-image-previews" class="pricing-multi-previews"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('add-inbound-modal')">取消</button>
+                        <button type="button" class="btn-primary" onclick="saveInbound()">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新建/编辑库房模态框 -->
+            <div id="add-warehouse-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="warehouse-modal-title"><i class="fas fa-warehouse"></i> 新建库房</h3>
+                        <button type="button" class="close-btn" onclick="closeModal('add-warehouse-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="warehouse-code">库房代码</label>
+                            <input type="text" id="warehouse-code" placeholder="例如 WH-004" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label for="warehouse-name">库房名称</label>
+                            <input type="text" id="warehouse-name" placeholder="请输入库房名称" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label for="warehouse-address">地址</label>
+                            <input type="text" id="warehouse-address" placeholder="请输入详细地址" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" onclick="closeModal('add-warehouse-modal')">取消</button>
+                        <button type="button" class="btn-primary" onclick="submitWarehouseForm()">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 查看入库照片模态框 -->
+            <div id="view-image-modal" class="modal view-image-modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-image"></i> 查看入库照片</h3>
+                        <button type="button" class="close-btn" onclick="closeModal('view-image-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="view-image-container">
+                            <h4>入库凭证照片</h4>
+                            <div id="view-inbound-image-container"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" onclick="closeModal('view-image-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 查看入库单详情模态框 -->
+            <div id="view-inbound-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-eye"></i> 入库单详情</h3>
+                        <button class="close-btn" onclick="closeModal('view-inbound-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>入库单号：</label>
+                                <span id="view-order-no">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>品种：</label>
+                                <span id="view-material">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>库房：</label>
+                                <span id="view-warehouse">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>重量：</label>
+                                <span id="view-weight">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>入库单价：</label>
+                                <span id="view-unit-price">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>入库总价：</label>
+                                <span id="view-total-price">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>入库时间：</label>
+                                <span id="view-date">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>状态：</label>
+                                <span id="view-status">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>审核人：</label>
+                                <span id="view-reviewer">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>审核日期：</label>
+                                <span id="view-review-date">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>实际出库重量：</label>
+                                <span id="view-actual-outbound">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>预出库重量：</label>
+                                <span id="view-pre-outbound">-</span>
+                            </div>
+                        </div>
+                        <div id="view-inbound-image-section" class="view-inbound-detail-image" style="display: none;">
+                            <h4>入库凭证</h4>
+                            <div id="view-inbound-detail-images"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('view-inbound-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置报价模态框 -->
+            <div id="set-quotation-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-chart-line"></i> 设置报价</h3>
+                        <button class="close-btn" onclick="closeModal('set-quotation-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>品种</label>
+                            <div class="readonly-field" id="quotation-material">-</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="quotation-price">报价（元/吨）</label>
+                            <input type="number" id="quotation-price" placeholder="请输入报价">
+                        </div>
+                        <div class="form-group">
+                            <label for="quotation-date">发布时间</label>
+                            <input type="datetime-local" id="quotation-date" step="1">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('set-quotation-modal')">取消</button>
+                        <button class="btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 报价历史模态框 -->
+            <div id="quotation-history-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-history"></i> 报价历史</h3>
+                        <button class="close-btn" onclick="closeModal('quotation-history-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>报价（元/吨）</th>
+                                        <th>发布时间</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quotation-history-list-modal">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('quotation-history-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新增出库计划模态框 -->
+            <div id="add-outbound-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-truck"></i> 创建预出库计划</h3>
+                        <button class="close-btn" onclick="closeModal('add-outbound-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="outbound-material">品种</label>
+                            <select id="outbound-material">
+                                <option value="">选择品种</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="outbound-warehouse">库房</label>
+                            <select id="outbound-warehouse">
+                                <option value="">选择库房</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="outbound-weight">预出库重量（吨）</label>
+                            <input type="number" id="outbound-weight" placeholder="请输入重量">
+                        </div>
+                        <div class="form-group">
+                            <label for="outbound-date">计划出库日期</label>
+                            <input type="date" id="outbound-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="outbound-quotation-select">报价依据（默认该品类对外报价中发布时间最新的一条，可改选）</label>
+                            <select id="outbound-quotation-select" disabled>
+                                <option value="">请先选择品种</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="outbound-sale-price">出库单价（元/吨）</label>
+                            <input type="number" id="outbound-sale-price" min="0" step="1" placeholder="选择报价后自动带出，可直接修改">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('add-outbound-modal')">取消</button>
+                        <button class="btn-primary" onclick="saveOutbound()">创建</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 出库详情模态框 -->
+            <div id="outbound-detail-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-eye"></i> 出库单详情</h3>
+                        <button class="close-btn" onclick="closeModal('outbound-detail-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>出库单号：</label>
+                                <span id="outbound-detail-order-no">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>品种：</label>
+                                <span id="outbound-detail-material">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>库房：</label>
+                                <span id="outbound-detail-warehouse">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>预出库重量：</label>
+                                <span id="outbound-detail-pre-weight">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>实际出库重量：</label>
+                                <span id="outbound-detail-actual-weight">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>出库价格：</label>
+                                <span id="outbound-detail-price">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>出库总价：</label>
+                                <span id="outbound-detail-total-price">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>出库日期：</label>
+                                <span id="outbound-detail-date">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>状态：</label>
+                                <span id="outbound-detail-status">-</span>
+                            </div>
+                        </div>
+                        
+                        <h4>出库子单</h4>
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>入库单号</th>
+                                        <th>预出库重量</th>
+                                        <th>实际出库重量</th>
+                                        <th>成本单价</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="outbound-suborder-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('outbound-detail-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 库存详情模态框 -->
+            <div id="inventory-detail-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-warehouse"></i> 库存详情</h3>
+                        <button class="close-btn" onclick="closeModal('inventory-detail-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>品种：</label>
+                                <span id="inventory-detail-material">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>库房：</label>
+                                <span id="inventory-detail-warehouse">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>总库存重量：</label>
+                                <span id="inventory-detail-total-weight">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>总库存价值：</label>
+                                <span id="inventory-detail-total-value">-</span>
+                            </div>
+                        </div>
+                        
+                        <h4>入库单明细</h4>
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>入库单号</th>
+                                        <th>入库时间</th>
+                                        <th>入库重量</th>
+                                        <th>已出库重量</th>
+                                        <th>预出库重量</th>
+                                        <th>可用库存</th>
+                                        <th>入库单价</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventory-inbound-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('inventory-detail-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 品种库存分布模态框 -->
+            <div id="material-distribution-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-chart-pie"></i> 品种库存分布</h3>
+                        <button class="close-btn" onclick="closeModal('material-distribution-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="data-table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>库房代码</th>
+                                        <th>库房名称</th>
+                                        <th>库存重量</th>
+                                        <th>库存价值</th>
+                                        <th>占比</th>
+                                        <th>分布图</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="material-distribution-list">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal('material-distribution-modal')">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传磅单并完成出库（必填实际出库重量 + 磅单图片；若曾仅上传过磅单可只填重量） -->
+    <div id="weighing-slip-upload-modal" class="modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-upload"></i> 上传磅单并完成出库</h3>
+                <button type="button" class="close-btn" onclick="closeWeighingSlipUploadModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="weighing-slip-modal-summary" style="margin: 0 0 12px; color: #2c3e50; font-weight: 500;"></p>
+                <p id="weighing-slip-modal-legacy-hint" style="display: none; margin: 0 0 16px; font-size: 13px; color: #856404; background: #fff3cd; padding: 10px 12px; border-radius: 6px;"></p>
+                <div class="form-group">
+                    <label for="weighing-slip-actual-weight">实际出库重量 <span style="color: #c0392b;">*</span></label>
+                    <input type="number" id="weighing-slip-actual-weight" min="0" step="0.001" placeholder="请输入实际出库重量" />
+                </div>
+                <div class="form-group">
+                    <label for="weighing-slip-file-modal">磅单图片 <span id="weighing-slip-file-required-mark" style="color: #c0392b;">*</span></label>
+                    <input type="file" id="weighing-slip-file-modal" accept="image/*" />
+                    <small style="color: #666;">支持常见图片格式，单张不超过 4MB</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeWeighingSlipUploadModal()">取消</button>
+                <button type="button" class="btn-primary" onclick="submitWeighingSlipAndComplete()">确认上传并完成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看磅单 -->
+    <div id="weighing-slip-view-modal" class="modal">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-image"></i> 查看磅单</h3>
+                <button type="button" class="close-btn" onclick="closeModal('weighing-slip-view-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="weighing-slip-preview-name" style="margin-bottom: 12px; color: #666; font-size: 14px;"></p>
+                <div style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 8px;">
+                    <img id="weighing-slip-preview-img" alt="磅单" style="max-width: 100%; max-height: 70vh; border-radius: 6px; border: 1px solid #e9ecef;" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModal('weighing-slip-view-modal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 后端 API：Vite 开发时走代理（同域 /api）；若用 file:// 打开请改为 http://localhost:3001 -->
+    <script>
+      window.__USE_BACKEND_API__ = true;
+      window.__API_BASE__ = '';
+    </script>
+    <script src="/inventory-api.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>
