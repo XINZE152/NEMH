@@ -84,6 +84,26 @@ curl -skI --max-time 10 https://redspiderbc.cn/project3/api/health
 
 浏览器访问：**`https://redspiderbc.cn/project3/`**。
 
+### 7.1 若出现 Nginx 自带「404 Not Found」页
+
+说明请求**未命中**你写的 **`location`**，或旧版 **`root` + `try_files`** 与当前 Nginx 对 **`/project3/`** 的处理不一致。
+
+**1）确认配置是否已加载：**
+
+```bash
+sudo nginx -T 2>/dev/null | grep -n 'project3'
+```
+
+若**没有任何输出**，说明 **`pd.conf` 里 443 的 `server` 中还没有** `project3` 的 **`location`**，请把 **`deploy/nginx-project3-redspiderbc.snippet.conf`** 中内容合并进去后，再执行 **`sudo nginx -t && sudo systemctl reload nginx`**。
+
+**2）若已有 `project3` 仍 404**：请用仓库**最新** snippet：静态段为 **`alias /var/www/redspider-sites/project3/`**（不要用易出问题的 **`try_files ... /project3/index.html`** 与 **`root`** 组合）。
+
+**3）确认文件权限：**
+
+```bash
+sudo -u www-data test -r /var/www/redspider-sites/project3/index.html && echo OK
+```
+
 ---
 
 ## 8. 可选：Swagger 单独 HTTPS 端口（对齐指南 8443/8444）
