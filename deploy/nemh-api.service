@@ -1,19 +1,15 @@
 # NEMH 后端 API — systemd 单元
 #
-# 安装（在服务器上，按需改路径与 User）：
-#   sudo bash deploy/install-nemh-api-systemd.sh
-# 或手动：
-#   sudo mkdir -p /var/log/nemh-api && sudo chown ubuntu:ubuntu /var/log/nemh-api
-#   sudo cp deploy/nemh-api.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now nemh-api
+# 安装：在仓库根目录执行
+#   sudo bash deploy/install-nemh-api-systemd.sh [REPO_ROOT]
 #
-# 日志：
-#   应用输出：tail -f /var/log/nemh-api/out.log  与  tail -f /var/log/nemh-api/err.log
-#   服务启停：journalctl -u nemh-api -f
+# 日志（相对仓库根目录，占位 __REPO_ROOT__ 由安装脚本替换为绝对路径）：
+#   logs/api.log     — Node 标准输出 + 标准错误（应用日志）
+#   logs/service.log — 服务启动/停止时间戳（ExecStartPre / ExecStopPost）
+# 详细 systemd 消息仍可用：journalctl -u nemh-api -f
 #
-# 若改用 journald 承接应用 stdout（不用文件），将 StandardOutput/StandardError
-# 改为 journal，并注释掉 append 两行，同时可设 SyslogIdentifier=nemh-api
+# 若改用 journal 承接应用输出：将 StandardOutput/StandardError 改为 journal，
+# 并注释掉下面两行 append。
 
 [Unit]
 Description=NEMH API (Express, PORT=8003)
@@ -25,22 +21,26 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 
-# 修改为服务器上本仓库的 server 目录绝对路径
-WorkingDirectory=/home/ubuntu/var/www/nemh-app/NEMH/server
+# 服务器上本仓库的 server 目录（占位由 install 脚本替换）
+WorkingDirectory=__REPO_ROOT__/server
 
 Environment=NODE_ENV=production
 Environment=PORT=8003
 
-# 使用系统 Node（与 apt / NodeSource 一致）；若仅用 nvm，请改为该 node 绝对路径
+ExecStartPre=/bin/sh -c 'mkdir -p __REPO_ROOT__/logs && echo "$$(date -Is) nemh-api starting" >> __REPO_ROOT__/logs/service.log'
+
+# 使用系统 Node；若仅用 nvm，改为该 node 绝对路径
 ExecStart=/usr/bin/node src/index.js
+
+ExecStopPost=/bin/sh -c 'echo "$$(date -Is) nemh-api stopped" >> __REPO_ROOT__/logs/service.log'
 
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
 
-# 应用日志（需目录存在且 User 可写）
-StandardOutput=append:/var/log/nemh-api/out.log
-StandardError=append:/var/log/nemh-api/err.log
+# 应用日志（stdout + stderr 合并到 api.log）
+StandardOutput=append:__REPO_ROOT__/logs/api.log
+StandardError=append:__REPO_ROOT__/logs/api.log
 
 [Install]
 WantedBy=multi-user.target
