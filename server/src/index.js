@@ -5,6 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import { initDb } from './db.js';
 import { createAuthMiddleware, tryLogin, logAuthHint } from './auth.js';
+import { createLogger, httpAccessLogMiddleware } from './logger.js';
 import { registerUserAdminRoutes } from './adminUsers.js';
 import { registerPurchasePriceRoutes } from './purchasePrices.js';
 import { registerSalePriceRoutes } from './salePrices.js';
@@ -17,6 +18,7 @@ import { registerPublicRegisterRoute } from './publicRegister.js';
 
 const PORT = Number(process.env.PORT) || 3001;
 const app = express();
+const log = createLogger('nemh.main');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OPENAPI_PATH = path.join(__dirname, '..', 'openapi.json');
@@ -51,6 +53,7 @@ window.onload = function () {
 
 app.use(cors({ origin: true }));
 app.use(express.json());
+app.use(httpAccessLogMiddleware());
 
 let db;
 let authMiddleware;
@@ -64,7 +67,7 @@ app.get('/openapi.json', (_req, res) => {
     const raw = fs.readFileSync(OPENAPI_PATH, 'utf8');
     res.type('application/json').send(raw);
   } catch (e) {
-    console.error(e);
+    log.error(`读取 openapi.json 失败: ${e?.message || e}`);
     res.status(500).json({ error: '无法读取 openapi.json' });
   }
 });
@@ -81,21 +84,27 @@ app.post('/api/admin/login', async (req, res) => {
     !username ||
     !password
   ) {
+    log.warn('登录入参无效: 缺少用户名或密码');
     return res.status(400).json({ error: '请输入用户名和密码' });
   }
   try {
     const result = await tryLogin(db, username, password);
     if (!result.ok) {
+      log.warn(`登录失败: 用户名或密码错误 (username=${username})`);
       return res.status(401).json({ error: '用户名或密码错误' });
     }
+    log.info(
+      `管理员登录成功: ${result.user.username} (id=${result.user.id}, role=${result.user.role})`
+    );
     res.json({ token: result.token, user: result.user });
   } catch (e) {
-    console.error(e);
+    log.error(`登录异常: ${e?.message || e}`);
     res.status(500).json({ error: '登录失败' });
   }
 });
 
 async function main() {
+  log.info(`启动中 NODE_ENV=${process.env.NODE_ENV || 'development'} PORT=${PORT}`);
   db = await initDb();
   authMiddleware = createAuthMiddleware(db);
   registerPublicRegisterRoute(app, db);
@@ -109,13 +118,13 @@ async function main() {
   registerWarehouseStockReportRoutes(app, db, authMiddleware);
   logAuthHint();
   app.listen(PORT, () => {
-    console.log(`API http://localhost:${PORT}`);
-    console.log(`Docs (Swagger UI) http://localhost:${PORT}/docs`);
-    console.log(`OpenAPI http://localhost:${PORT}/openapi.json`);
+    log.info(`HTTP 服务已监听 http://localhost:${PORT}`);
+    log.info(`Swagger UI http://localhost:${PORT}/docs`);
+    log.info(`OpenAPI JSON http://localhost:${PORT}/openapi.json`);
   });
 }
 
 main().catch((err) => {
-  console.error(err);
+  log.error(`进程退出: ${err?.stack || err?.message || err}`);
   process.exit(1);
 });

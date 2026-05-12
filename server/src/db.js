@@ -3,6 +3,9 @@ import bcrypt from 'bcryptjs';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.db');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, '..', 'data');
@@ -308,6 +311,7 @@ export async function initDb() {
     }
   }
 
+  log.info(`SQLite 已就绪: ${dbPath}`);
   return db;
 }
 
