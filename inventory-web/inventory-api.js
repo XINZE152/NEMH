@@ -355,6 +355,9 @@
     createInbound: function (body) {
       return apiFetch('/api/admin/inbound-orders', { method: 'POST', body: body });
     },
+    deleteInbound: function (id) {
+      return apiFetch('/api/admin/inbound-orders/' + id, { method: 'DELETE' });
+    },
     approveInbound: function (id) {
       return apiFetch('/api/admin/inbound-orders/' + id + '/approve', { method: 'PUT', body: {} });
     },

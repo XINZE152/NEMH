@@ -986,6 +986,31 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["入库单"],
+        "summary": "删除入库单（库房；仅待审核、无出库 FIFO 关联）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "已删除" },
+          "400": {
+            "description": "非待审核或已有出库子单关联",
+            "content": {
+              "application/json": {
+                "example": { "error": "仅待审核状态的入库单可删除" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "入库单不存在" } }
+            }
+          }
+        }
       }
     },
     "/api/admin/inbound-orders/{id}/approve": {

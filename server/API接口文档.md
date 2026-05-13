@@ -338,6 +338,12 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **请求体（可选）：** `rejectReason` / `reject_reason` / `reason`（字符串，最长约 500）。
 
+### `DELETE /api/admin/inbound-orders/:id`（仅 `warehouse`）
+
+物理删除入库单。仅 `audit_status === 'pending'` 可操作；若已存在 `outbound_fifo_lines` 关联则不可删除（与驳回规则一致）。
+
+**成功 204**（无响应体）。
+
 ---
 
 ## 出库单与磅单

@@ -417,4 +417,38 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
     }
   }
   );
+
+  app.delete(
+    '/api/admin/inbound-orders/:id',
+    authMiddleware,
+    requireWarehouseRole,
+    async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id < 1) {
+          return res.status(400).json({ error: '无效 id' });
+        }
+        const existing = await get(db, 'SELECT * FROM inbound_orders WHERE id = ?', [
+          id,
+        ]);
+        if (!existing) return res.status(404).json({ error: '入库单不存在' });
+        if (existing.audit_status !== 'pending') {
+          return res.status(400).json({ error: '仅待审核状态的入库单可删除' });
+        }
+        const linked = await get(
+          db,
+          'SELECT 1 AS x FROM outbound_fifo_lines WHERE inbound_order_id = ? LIMIT 1',
+          [id]
+        );
+        if (linked) {
+          return res.status(400).json({ error: '已存在出库子单关联，不可删除' });
+        }
+        await run(db, 'DELETE FROM inbound_orders WHERE id = ?', [id]);
+        res.status(204).send();
+      } catch (e) {
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
+        res.status(500).json({ error: '删除入库单失败' });
+      }
+    }
+  );
 }

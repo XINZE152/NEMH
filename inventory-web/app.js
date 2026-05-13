@@ -2153,7 +2153,25 @@ function deleteInbound(id) {
     if (!confirm('确定要删除这条入库单吗？')) return;
 
     if (useApiMode()) {
-        showMessage('后端未提供删除入库单接口，请在待审核状态下由统计部驳回', 'info');
+        const orderBefore = AppState.inboundOrders.find((o) => o.id === id);
+        if (!orderBefore) return;
+        if (orderBefore.status !== 'pending') {
+            showMessage('只能删除待审核状态的入库单', 'error');
+            return;
+        }
+        const label = orderBefore.orderNo || '#' + id;
+        void (async function () {
+            try {
+                await window.InventoryApi.deleteInbound(id);
+                await window.InventoryApi.refreshAppStateFromServer(AppState);
+                loadInboundPage();
+                updateDashboardStats();
+                showMessage('已删除入库单 ' + label, 'success');
+                addAction('inbound', '删除入库单（API） ' + label);
+            } catch (e) {
+                showMessage(e.message || '删除失败', 'error');
+            }
+        })();
         return;
     }
     
