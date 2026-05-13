@@ -230,6 +230,26 @@ sudo bash deploy/install-nemh-api-systemd.sh /home/ubuntu/var/www/nemh-app/NEMH
 
 **更新代码后的典型顺序**：进入仓库根目录 → `git pull` →（若 `package.json` / lock 有变则 `npm install`）→ `sudo systemctl restart nemh-api` → `tail -f logs/api.log` 或 `status` 确认无误。
 
+### 服务器上同步后端与进销存前端（不含拉代码）
+
+以下均在**仓库根目录**执行；`<仓库根目录>`、`<进销存静态站点目录>` 请替换为你本机实际路径（与 Nginx 中 `location` 的 `alias` / `root` 一致）。
+
+**后端（`server/`）**
+
+1. 若 `server/package.json` 或 lock 有变更：`npm --prefix server install`。
+2. 加载新代码：`sudo systemctl restart nemh-api`。
+
+**前端（进销存 `inventory-web/`，部署在子路径时）**
+
+1. 若 `inventory-web/package.json` 或 lock 有变更：`npm --prefix inventory-web install`。
+2. 构建：`INVENTORY_BASE=/project3/ npm --prefix inventory-web run build`（将 `/project3/` 换成你线上实际子路径，须与 Vite `base` 及 Nginx 前缀一致。）
+3. 将构建产物同步到静态站点目录：  
+   `sudo rsync -a --delete <仓库根目录>/inventory-web/dist/ <进销存静态站点目录>/`  
+   `sudo chown -R www-data:www-data <进销存静态站点目录>`  
+   （运行用户、`chown` 目标以你环境为准。）
+
+**说明**：仅重启 `nemh-api` 不会更新浏览器中的 HTML/JS；改前端须完成构建并覆盖静态目录。若只改了 Nginx 配置，再执行 `sudo nginx -t && sudo systemctl reload nginx`。部署后建议浏览器强制刷新（Ctrl+F5），减少旧脚本缓存。
+
 **后端日志环境变量**（可在 `nemh-api.service` 的 `[Service]` 中增加 `Environment=...`）：`LOG_LEVEL`（`debug` / `info` / `warn` / `error`，默认 `info`）、`LOG_HTTP=0`（关闭每条 HTTP 访问日志）、`LOG_AUTH=1` 且 `LOG_LEVEL=debug`（可选的鉴权调试行）。详见 `server/src/logger.js` 文件头注释。
 
 ---
