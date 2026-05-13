@@ -228,7 +228,7 @@ sudo bash deploy/install-nemh-api-systemd.sh /home/ubuntu/var/www/nemh-app/NEMH
 | 查看服务启停时间戳 | `tail -f logs/service.log` |
 | 从 journal 看 systemd 汇总输出 | `sudo journalctl -u nemh-api -f` |
 
-**更新代码后的典型顺序**：进入仓库根目录 → `git pull` →（若 `package.json` / lock 有变则 `npm install`）→ `sudo systemctl restart nemh-api` → `tail -f logs/api.log` 或 `status` 确认无误。
+**更新代码后的典型顺序**：进入仓库根目录 → `git pull` →（若 `package.json` / lock 有变则对对应子包执行 **`npm ci`**，见下节）→ `sudo systemctl restart nemh-api` → `tail -f logs/api.log` 或 `status` 确认无误。
 
 ### 服务器上同步后端与进销存前端（不含拉代码）
 
@@ -236,17 +236,26 @@ sudo bash deploy/install-nemh-api-systemd.sh /home/ubuntu/var/www/nemh-app/NEMH
 
 **后端（`server/`）**
 
-1. 若 `server/package.json` 或 lock 有变更：`npm --prefix server install`。
+1. 若 `server/package.json` 或 `package-lock.json` 有变更：在仓库根目录执行 **`npm --prefix server ci`**（推荐；与已提交 lock 严格一致）。若尚未提交 lock 或本地无 lock，再使用 `npm --prefix server install`。
 2. 加载新代码：`sudo systemctl restart nemh-api`。
 
 **前端（进销存 `inventory-web/`，部署在子路径时）**
 
-1. 若 `inventory-web/package.json` 或 lock 有变更：`npm --prefix inventory-web install`。
+1. 若 `inventory-web/package.json` 或 `package-lock.json` 有变更：在仓库根目录执行 **`npm --prefix inventory-web ci`**（推荐）。要求仓库中的 `package-lock.json` 已与 `package.json` 同步并提交；否则会报错，需在开发机修好锁文件后再部署。
 2. 构建：`INVENTORY_BASE=/project3/ npm --prefix inventory-web run build`（将 `/project3/` 换成你线上实际子路径，须与 Vite `base` 及 Nginx 前缀一致。）
 3. 将构建产物同步到静态站点目录：  
    `sudo rsync -a --delete <仓库根目录>/inventory-web/dist/ <进销存静态站点目录>/`  
    `sudo chown -R www-data:www-data <进销存静态站点目录>`  
    （运行用户、`chown` 目标以你环境为准。）
+
+**为何服务器上 `package-lock.json` 会被改、如何避免**
+
+- 在 **Linux 服务器**上执行 **`npm install`** 时，npm 可能按当前环境重写锁文件（例如 Vite/Rollup 的可选平台包在 Windows 与 Linux 下元数据不一致，出现删除或新增 `"libc"` 等字段），即使你没有手改文件，Git 也会显示 `package-lock.json` 有变更。
+- **推荐**：部署安装依赖时使用 **`npm ci`**，按锁文件安装且**不会**像 `npm install` 那样随意改写 `package-lock.json`。
+- **可选**：在 CI 或本机执行 `npm ci` + `build`，只把 **`inventory-web/dist/`** 同步到服务器，则服务器上**无需**再执行 npm 安装，也就不会出现锁文件在服务器上被改动的问题。
+- **不能省略的步骤**：若仍在服务器上执行 `vite build`，则**必须**先安装依赖（`npm ci` 或 `npm install`）；不能长期跳过安装直接构建。
+
+**Vite 构建时的脚本提示**：若出现 `index.html` 中 `<script src="/inventory-api.js">`、`app.js` 无法被打包（缺少 `type="module"`）的提示，属于当前「多脚本 + 传统全局」结构的说明性日志，**不影响**生成 `dist/`；除非你要改造成单入口 ESM，否则可忽略。
 
 **说明**：仅重启 `nemh-api` 不会更新浏览器中的 HTML/JS；改前端须完成构建并覆盖静态目录。若只改了 Nginx 配置，再执行 `sudo nginx -t && sudo systemctl reload nginx`。部署后建议浏览器强制刷新（Ctrl+F5），减少旧脚本缓存。
 
