@@ -206,6 +206,32 @@ cd server && npm start
 3. **进程守护**：使用 systemd、pm2、K8s 等，保证崩溃自启；数据目录挂载持久卷。
 4. **配置**：通过环境变量注入密钥与连接信息，勿写死在仓库中。
 
+本仓库在 `deploy/` 下提供了 **systemd 单元 `nemh-api`**（默认监听 `PORT=8003`，工作目录为仓库下的 `server/`）。首次或单元文件变更后，在服务器**仓库根目录**执行（将路径换成你的部署目录）：
+
+```bash
+sudo bash deploy/install-nemh-api-systemd.sh /home/ubuntu/var/www/nemh-app/NEMH
+```
+
+脚本会创建 `logs/`、安装 `/etc/systemd/system/nemh-api.service` 并 `enable` + `restart` 服务。
+
+### 服务器常用命令（`nemh-api`）
+
+以下命令在任意目录均可执行；查看日志建议在**仓库根目录**下使用相对路径 `logs/`。
+
+| 操作 | 命令 |
+|------|------|
+| 拉取代码后重启（使新代码生效） | `sudo systemctl restart nemh-api` |
+| 查看运行状态（不分页） | `sudo systemctl status nemh-api --no-pager` |
+| 停止 / 启动 | `sudo systemctl stop nemh-api` / `sudo systemctl start nemh-api` |
+| 重载 systemd 配置（修改了 `.service` 文件后） | `sudo systemctl daemon-reload` 然后再次 `restart` |
+| 实时查看应用日志 | `tail -f logs/api.log`（路径相对仓库根，下同） |
+| 查看服务启停时间戳 | `tail -f logs/service.log` |
+| 从 journal 看 systemd 汇总输出 | `sudo journalctl -u nemh-api -f` |
+
+**更新代码后的典型顺序**：进入仓库根目录 → `git pull` →（若 `package.json` / lock 有变则 `npm install`）→ `sudo systemctl restart nemh-api` → `tail -f logs/api.log` 或 `status` 确认无误。
+
+**后端日志环境变量**（可在 `nemh-api.service` 的 `[Service]` 中增加 `Environment=...`）：`LOG_LEVEL`（`debug` / `info` / `warn` / `error`，默认 `info`）、`LOG_HTTP=0`（关闭每条 HTTP 访问日志）、`LOG_AUTH=1` 且 `LOG_LEVEL=debug`（可选的鉴权调试行）。详见 `server/src/logger.js` 文件头注释。
+
 ---
 
 ## 基于本模版定制时的检查清单

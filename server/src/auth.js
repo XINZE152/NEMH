@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { get } from './db.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.auth');
 
 const JWT_SECRET =
   process.env.JWT_SECRET || 'demo-jwt-secret-change-in-production';
@@ -78,6 +81,7 @@ export function createAuthMiddleware(db) {
     get(db, 'SELECT id, username, role FROM users WHERE id = ?', [userId])
       .then((row) => {
         if (!row) {
+          log.warn(`JWT 有效但用户不存在或已删除: userId=${userId}`);
           return res.status(401).json({ error: '用户不存在或已删除' });
         }
         req.admin = {
@@ -85,10 +89,15 @@ export function createAuthMiddleware(db) {
           username: row.username,
           role: normalizeUserRole(row.role),
         };
+        if (process.env.LOG_AUTH === '1') {
+          log.debug(
+            `JWT 鉴权成功: ${row.username} (id=${row.id}, role=${req.admin.role})`
+          );
+        }
         next();
       })
       .catch((e) => {
-        console.error(e);
+        log.error(`鉴权查询用户失败: ${e?.message || e}`);
         res.status(500).json({ error: '鉴权失败' });
       });
   };
