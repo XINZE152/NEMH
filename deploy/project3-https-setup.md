@@ -30,7 +30,7 @@
 cd /home/ubuntu/var/www/nemh-app/NEMH
 git pull
 npm install
-INVENTORY_BASE=/project3/ npm run build -w @nodejs/inventory-web
+INVENTORY_BASE=/project3/ npm --prefix inventory-web run build
 ```
 
 说明：环境变量 **`INVENTORY_BASE=/project3/`** 会设置 Vite `base`，并在构建时把 **`window.__API_BASE__`** 写成 **`'/project3'`**，请求会走 **`/project3/api/...`**，与下节 Nginx 一致。

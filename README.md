@@ -2,7 +2,7 @@
 
 > **使用说明**：将文首标题、简介与下方「占位说明」替换为你的项目信息；端口、包名、接口路径等以各 `package.json` 与代码为准，本文默认值仅作示例。
 
-三端分离的 Web 应用骨架：**用户端（Client）**、**管理后台（Admin）**、**API 服务（Server）**，通过 npm workspaces 聚合，适合作为中小型业务系统的起点。
+三端分离的 Web 应用骨架：**用户端（Client）**、**管理后台（Admin）**、**API 服务（Server）**，根目录用脚本聚合各子包（**未使用 npm workspaces**，便于在 Windows 上安装依赖），适合作为中小型业务系统的起点。
 
 ---
 
@@ -41,7 +41,7 @@
 
 | 层级 | 默认选型 | 备注 |
 |------|----------|------|
-| 根工程 | npm workspaces、`concurrently` | 可换 pnpm/yarn、Turborepo 等 |
+| 根工程 | 根 `package.json` 聚合脚本、`concurrently`、各子目录独立 `npm install` | 可换 pnpm/yarn、Turborepo 等 |
 | 服务端 | Node.js 18+、Express、ESM | 可换 Fastify/Nest 等 |
 | 数据与鉴权 | SQLite、JWT、密码哈希 | 可换 PostgreSQL + ORM、Session 等 |
 | 用户端 | React 18、Vite 6 | 可换 Vue/Svelte 等 |
@@ -53,7 +53,7 @@
 
 ```
 ./
-├── package.json              # workspaces、聚合脚本 dev / build
+├── package.json              # 聚合脚本 dev / build、install:all
 ├── server/                   # 后端 API
 │   ├── package.json
 │   ├── src/                    # 建议：入口、db、auth、按业务域拆分路由
@@ -72,22 +72,22 @@
     └── src/
 ```
 
-**命名建议**：子包使用 **作用域包名**（如 `@your-scope/server`），与根目录 `npm run dev -w @your-scope/xxx` 保持一致。
+**命名建议**：子包使用 **作用域包名**（如 `@your-scope/server`），与根目录 `npm --prefix server run dev` 等脚本风格保持一致。
 
 ---
 
 ## 环境要求
 
 - **Node.js**：与根目录及各子包 `engines.node` 一致（本模版为 `>= 18`）。
-- **包管理器**：npm 9+ 推荐（完整支持 `workspaces` 与 `-w`）。
+- **包管理器**：npm 9+ 推荐；根目录执行 `npm run install:all` 安装根与各子包依赖。
 
 ---
 
 ## 快速开始
 
 ```bash
-# 仅在仓库根目录安装依赖
-npm install
+# 在仓库根目录安装根与各子包依赖（推荐）
+npm run install:all
 
 # 并行启动 server + client + admin
 npm run dev
@@ -105,13 +105,13 @@ npm run dev:inventory
 | 用户端模版（`client`，占位） | http://localhost:5175 |
 | 管理端模版（`admin`） | http://localhost:5174 |
 
-**单独启动某一 workspace（根目录执行）**
+**单独启动某一子包（根目录执行）**
 
 ```bash
-npm run dev -w @nodejs/server
-npm run dev -w @nodejs/inventory-web
-npm run dev -w @nodejs/client
-npm run dev -w @nodejs/admin
+npm --prefix server run dev
+npm --prefix inventory-web run dev
+npm --prefix client run dev
+npm --prefix admin run dev
 ```
 
 > 将 `@nodejs/*` 替换为你实际在子包 `package.json` 中声明的 `name`。
@@ -178,7 +178,7 @@ cd server && npm start
 
 ### 工程
 
-- 依赖只在**根目录** `npm install`，避免子目录重复 lock 导致版本漂移。
+- 根目录执行 `npm run install:all`；各子包可有独立 `package-lock.json`，版本以各子包为准。
 - `engines`、CI 镜像与本地 Node 版本对齐。
 
 ### 前端

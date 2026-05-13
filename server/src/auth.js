@@ -14,8 +14,13 @@ export function normalizeUserRole(role) {
 
 export function logAuthHint() {
   console.log(
-    '[auth] 空库自动创建 admin / admin123（statistics）：审核入库、管理用户、发布对外报价。库房 role=warehouse：收货定价、入库、出库。自助注册：POST /api/register（固定库房角色）。JWT_SECRET 可覆盖密钥。'
+    '[auth] 空库自动创建 admin / admin123（statistics）：内置超级管理员，拥有统计部与库房全部 API 权限。其他 statistics 用户仅统计部接口；库房 role=warehouse：收货定价、入库、出库。自助注册：POST /api/register。JWT_SECRET 可覆盖密钥。'
   );
+}
+
+/** 内置账号 admin：在保持 DB 角色为 statistics 的前提下，放行库房与统计部两类接口（本地/内网联调用）。 */
+export function isBuiltInSuperAdmin(req) {
+  return req.admin?.username === 'admin';
 }
 
 export function hashPassword(plain) {
@@ -89,17 +94,17 @@ export function createAuthMiddleware(db) {
   };
 }
 
-/** 仅统计部：审核入库、用户管理、发布报价等 */
+/** 仅统计部：审核入库、用户管理、发布报价等（admin 超级管理员亦放行） */
 export function requireStatisticsRole(req, res, next) {
-  if (req.admin?.role === 'statistics') {
+  if (isBuiltInSuperAdmin(req) || req.admin?.role === 'statistics') {
     return next();
   }
   return res.status(403).json({ error: '仅统计部可操作' });
 }
 
-/** 仅库房：收货定价、入库录入、出库等 */
+/** 仅库房：收货定价、入库录入、出库等（admin 超级管理员亦放行） */
 export function requireWarehouseRole(req, res, next) {
-  if (req.admin?.role === 'warehouse') {
+  if (isBuiltInSuperAdmin(req) || req.admin?.role === 'warehouse') {
     return next();
   }
   return res.status(403).json({ error: '仅库房可操作' });

@@ -39,10 +39,10 @@
                 
                 <div class="demo-accounts">
                     <h3>登录说明</h3>
-                    <p class="subtitle" style="font-size:13px;margin:0 0 10px;">对接后端仅可使用<strong>数据库中已存在</strong>的用户。空库默认 <code>admin / admin123</code> 为<strong>统计部</strong>（入库审核、对外报价等）；<strong>收货定价 / 入库 / 出库</strong>须使用 <code>role=warehouse</code> 的库房账号，请用 admin 登录后在用户管理里新建库房用户。</p>
+                    <p class="subtitle" style="font-size:13px;margin:0 0 10px;">对接后端仅可使用<strong>数据库中已存在</strong>的用户。空库默认 <code>admin / admin123</code> 为<strong>超级管理员</strong>（统计部 + 库房全部功能）。其他统计部账号仅审核/报价等；若需<strong>仅库房权限</strong>的账号，请用 admin 在用户管理中新建 <code>role=warehouse</code> 用户。</p>
                     <div class="account-list">
                         <div class="account-item" data-username="admin" data-password="admin123">
-                            <strong>默认管理员（后端）</strong>
+                            <strong>默认超级管理员（后端）</strong>
                             <span>admin / admin123</span>
                         </div>
                         <div class="account-item offline-demo-account" data-username="statistics" data-password="stat123">
@@ -405,6 +405,11 @@
                     <h1><i class="fas fa-chart-line"></i> 对外报价管理</h1>
                     <p>维护公司对外统一的销售指导价，供出库时参考</p>
                 </div>
+                <div class="page-actions">
+                    <button type="button" class="btn-primary" id="btn-open-publish-quotation">
+                        <i class="fas fa-plus"></i> 发布对外报价
+                    </button>
+                </div>
                 
                 <div class="quotation-container">
                     <div class="quotation-board">
@@ -424,6 +429,7 @@
                                         <th>报价（元/吨）</th>
                                         <th>发布时间</th>
                                         <th>状态</th>
+                                        <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="quotation-history-list">
@@ -954,6 +960,29 @@
                     <div class="modal-footer">
                         <button class="btn-secondary" onclick="closeModal('set-quotation-modal')">取消</button>
                         <button class="btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 选择品种后发布/修改对外报价 -->
+            <div id="pick-material-quotation-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-list"></i> 选择品种</h3>
+                        <button type="button" class="close-btn" onclick="closeModal('pick-material-quotation-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="pick-material-quotation-select">品种</label>
+                            <select id="pick-material-quotation-select">
+                                <option value="">请选择品种</option>
+                            </select>
+                        </div>
+                        <p class="form-hint">选择后将打开报价表单；若该品种已有有效报价，保存后将发布新版本并自动成为当前有效价。</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" onclick="closeModal('pick-material-quotation-modal')">取消</button>
+                        <button type="button" class="btn-primary" id="pick-material-quotation-confirm-btn">下一步</button>
                     </div>
                 </div>
             </div>

@@ -860,6 +860,21 @@ body {
     margin-top: 20px;
 }
 
+.quotation-board-empty {
+    margin-top: 20px;
+    padding: 24px 20px;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px dashed #cbd5e1;
+}
+
+.quotation-board-empty p {
+    margin: 0 0 16px;
+    line-height: 1.5;
+}
+
 .quotation-card {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
