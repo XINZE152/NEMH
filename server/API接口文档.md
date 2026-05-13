@@ -321,7 +321,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 | `materialId` | 必填 |
 | `weight` | 必填，>0 |
 | `unitPrice` / `unit_price` / `price` | 必填，>0，且须与最新收货定价一致 |
-| `photo` / `inboundPhoto` | 入库照片地址，必填 |
+| `photo` / `inboundPhoto` | 入库照片（URL 或 DataURL 字符串，**可选**；多图可用英文逗号拼接） |
 | `inboundAt` / `inbound_at` / `inboundTime` | 可选 |
 | `warehouseId` / `warehouse_id` | 可选，默认 `1` |
 | `orderNo` / `order_no` | 可选；不传则服务端生成 `RK-YYYYMMDD-####` |

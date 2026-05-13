@@ -264,9 +264,6 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       if (unitPrice === null) {
         return res.status(400).json({ error: '单价须为大于 0 的数字' });
       }
-      if (!photo) {
-        return res.status(400).json({ error: '请填写入库单照片地址' });
-      }
 
       const material = await get(db, 'SELECT id FROM materials WHERE id = ?', [
         materialId,

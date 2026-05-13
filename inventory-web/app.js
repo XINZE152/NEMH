@@ -1863,6 +1863,15 @@ function showAddInboundModal() {
         saveBtn.textContent = '保存';
     }
 
+    const photoLabel = document.getElementById('inbound-photo-label');
+    const photoHint = document.getElementById('inbound-photo-hint');
+    if (photoLabel) {
+        photoLabel.textContent = '上传入库照片（可选）';
+    }
+    if (photoHint) {
+        photoHint.textContent = '可多选添加，最多 20 张，单张不超过 5MB。';
+    }
+
     // 显示模态框
     modal.style.display = 'block';
 }
@@ -1894,10 +1903,6 @@ function saveInbound() {
             ? AppState.tempInboundImages
             : [];
         const photo = imgs.length ? imgs.join(',') : '';
-        if (!photo) {
-            showMessage('对接后端时须至少上传一张入库照片（DataURL）', 'error');
-            return;
-        }
         const inboundAt = new Date(dtLocal).toISOString();
         void (async function () {
             try {
