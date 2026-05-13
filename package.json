@@ -4,16 +4,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "workspaces": [
-    "server",
-    "client",
-    "admin",
-    "inventory-web"
-  ],
   "scripts": {
-    "dev": "concurrently -n server,client,admin -c blue,green,magenta \"npm run dev -w @nodejs/server\" \"npm run dev -w @nodejs/client\" \"npm run dev -w @nodejs/admin\"",
-    "dev:inventory": "concurrently -n server,web -c blue,cyan \"npm run dev -w @nodejs/server\" \"npm run dev -w @nodejs/inventory-web\"",
-    "build": "npm run build -w @nodejs/server && npm run build -w @nodejs/client && npm run build -w @nodejs/admin && npm run build -w @nodejs/inventory-web"
+    "dev": "npm exec concurrently -- -n server,client,admin -c blue,green,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\" \"npm --prefix admin run dev\"",
+    "dev:inventory": "npm exec concurrently -- -n server,web -c blue,cyan \"npm --prefix server run dev\" \"npm --prefix inventory-web run dev\"",
+    "build": "npm --prefix server run build && npm --prefix client run build && npm --prefix admin run build && npm --prefix inventory-web run build",
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install && npm --prefix admin install && npm --prefix inventory-web install",
+    "install:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/npm-install-win.ps1"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

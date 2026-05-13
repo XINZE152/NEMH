@@ -91,23 +91,37 @@
   }
 
   /**
-   * 与后端 DB 角色一致：默认 admin 为 statistics，无「全权限」以免前端可操作但 POST 返回 403。
-   * 收货定价/入库/出库等写接口以服务端 requireWarehouseRole 为准。
+   * 与后端一致：username=admin 且非库房 DB 角色时，映射为全权限（与离线「系统管理员」一致）。
+   * 其他 statistics 用户仅统计部菜单；库房为 warehouse。服务端对 admin 同时放行统计/库房接口。
    */
   function mapLoginUser(apiUser) {
     const roleStr = apiUser.role === 'warehouse' ? 'warehouse' : 'statistics';
     const isWarehouse = roleStr === 'warehouse';
+
+    if (apiUser.username === 'admin' && !isWarehouse) {
+      const user = {
+        id: apiUser.id,
+        username: apiUser.username,
+        name: '系统管理员',
+        roleId: 1,
+        warehouseId: null,
+        apiRole: 'statistics',
+      };
+      const role = { id: 1, name: '系统管理员', permissions: ['all'] };
+      return { user, role };
+    }
+
     const role = isWarehouse
       ? { id: 3, name: '库房', permissions: ['pricing', 'inbound', 'outbound'] }
       : {
           id: 2,
-          name: apiUser.username === 'admin' ? '系统管理员（统计部）' : '统计部',
+          name: '统计部',
           permissions: ['review', 'quotation', 'report'],
         };
     const user = {
       id: apiUser.id,
       username: apiUser.username,
-      name: apiUser.username === 'admin' ? '系统管理员' : apiUser.username,
+      name: apiUser.username,
       roleId: role.id,
       warehouseId: isWarehouse ? 1 : null,
       apiRole: roleStr,
@@ -231,19 +245,24 @@
   function buildQuotationsFromSalePrices(prices) {
     const byMat = new Map();
     (prices || []).forEach(function (p) {
-      const mid = p.materialId;
+      const mid = Number(p.materialId ?? p.material_id);
+      if (!Number.isFinite(mid)) return;
       const t = new Date(p.publishedAt || p.published_at || 0).getTime();
       const prev = byMat.get(mid);
       if (!prev || t > prev.t) byMat.set(mid, { t: t, row: p });
     });
     const list = [];
     (prices || []).forEach(function (p) {
-      const latest = byMat.get(p.materialId);
-      const isActive = latest && latest.row && latest.row.id === p.id;
+      const mid = Number(p.materialId ?? p.material_id);
+      if (!Number.isFinite(mid)) return;
+      const latest = byMat.get(mid);
+      const lid = latest && latest.row ? Number(latest.row.id) : NaN;
+      const pid = Number(p.id);
+      const isActive = Number.isFinite(lid) && Number.isFinite(pid) && lid === pid;
       list.push({
-        id: p.id,
-        materialId: p.materialId,
-        price: Number(p.unitPrice),
+        id: pid,
+        materialId: mid,
+        price: Number(p.unitPrice ?? p.unit_price),
         date: p.publishedAt || p.published_at,
         isActive: !!isActive,
       });

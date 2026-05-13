@@ -49,6 +49,20 @@ function isWarehouseApiRole() {
     return getApiUserRole() === 'warehouse';
 }
 
+/** API 模式下：库房角色，或内置 admin（与后端超级管理员一致，可操作收货定价等） */
+function isWarehouseApiRoleOrSuperAdmin() {
+    if (!useApiMode()) return true;
+    if (isWarehouseApiRole()) return true;
+    try {
+        const raw = localStorage.getItem('apiUser');
+        if (!raw) return false;
+        const u = JSON.parse(raw);
+        return u && u.username === 'admin';
+    } catch {
+        return false;
+    }
+}
+
 // 初始化应用
 function initApp() {
     loadDemoData();
@@ -492,6 +506,15 @@ function setupEventListeners() {
     
     // 出库管理：创建预出库计划
     document.getElementById('add-pre-outbound-btn').addEventListener('click', showAddOutboundModal);
+
+    const publishQuotationBtn = document.getElementById('btn-open-publish-quotation');
+    if (publishQuotationBtn) {
+        publishQuotationBtn.addEventListener('click', openPickMaterialForQuotationModal);
+    }
+    const pickMaterialQuotationConfirm = document.getElementById('pick-material-quotation-confirm-btn');
+    if (pickMaterialQuotationConfirm) {
+        pickMaterialQuotationConfirm.addEventListener('click', confirmPickMaterialForQuotation);
+    }
     
     // 入库审核标签页
     document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
@@ -863,7 +886,9 @@ function getWarehouseName(id) {
 
 /** 品种当前启用中的对外报价（元/吨），用于入库列表「出库单价」展示 */
 function getActiveQuotationPriceForMaterial(materialId) {
-    const q = AppState.quotations.find((x) => x.materialId === materialId && x.isActive);
+    const q = AppState.quotations.find(
+        (x) => Number(x.materialId) === Number(materialId) && x.isActive
+    );
     return q != null && Number.isFinite(Number(q.price)) ? Number(q.price) : null;
 }
 
@@ -1307,7 +1332,7 @@ function loadPricingPage() {
 
     const addBtn = document.getElementById('add-pricing-btn');
     if (addBtn) {
-        addBtn.style.display = !useApiMode() || isWarehouseApiRole() ? '' : 'none';
+        addBtn.style.display = !useApiMode() || isWarehouseApiRoleOrSuperAdmin() ? '' : 'none';
     }
 
     pricingList.innerHTML = '';
@@ -1318,7 +1343,7 @@ function loadPricingPage() {
         return;
     }
 
-    const canMutatePricing = !useApiMode() || isWarehouseApiRole();
+    const canMutatePricing = !useApiMode() || isWarehouseApiRoleOrSuperAdmin();
 
     AppState.pricingRecords.forEach((record) => {
         const material = AppState.materials.find((m) => m.id === record.materialId);
@@ -1365,7 +1390,7 @@ function filterPricingList() {
 
 // 显示新增定价模态框
 function showAddPricingModal() {
-    if (useApiMode() && !isWarehouseApiRole()) {
+    if (useApiMode() && !isWarehouseApiRoleOrSuperAdmin()) {
         showMessage('收货定价的新增/修改/删除仅库房角色可操作，请使用库房账号登录或由统计部创建库房用户', 'error');
         return;
     }
@@ -1476,7 +1501,7 @@ function savePricing() {
 
 // 编辑定价记录
 function editPricing(id) {
-    if (useApiMode() && !isWarehouseApiRole()) {
+    if (useApiMode() && !isWarehouseApiRoleOrSuperAdmin()) {
         showMessage('收货定价仅库房角色可编辑', 'error');
         return;
     }
@@ -1613,7 +1638,7 @@ function updatePricing(id) {
 
 // 删除定价记录
 function deletePricing(id) {
-    if (useApiMode() && !isWarehouseApiRole()) {
+    if (useApiMode() && !isWarehouseApiRoleOrSuperAdmin()) {
         showMessage('收货定价仅库房角色可删除', 'error');
         return;
     }
@@ -2629,9 +2654,11 @@ function updateQuotationBoard() {
     // 每个品种仅保留一条当前有效（若有多条则取发布时间最新）
     const latestActiveByMaterial = new Map();
     activeQuotations.forEach((q) => {
-        const prev = latestActiveByMaterial.get(q.materialId);
+        const mid = Number(q.materialId);
+        if (!Number.isFinite(mid)) return;
+        const prev = latestActiveByMaterial.get(mid);
         if (!prev || parseQuotationDateTime(q.date) > parseQuotationDateTime(prev.date)) {
-            latestActiveByMaterial.set(q.materialId, q);
+            latestActiveByMaterial.set(mid, q);
         }
     });
     // 按各品类最新发布时间倒序，优先展示最近更新的报价
@@ -2640,7 +2667,9 @@ function updateQuotationBoard() {
     );
     
     sorted.forEach((quotation) => {
-        const material = AppState.materials.find(m => m.id === quotation.materialId);
+        const material = AppState.materials.find(
+            (m) => Number(m.id) === Number(quotation.materialId)
+        );
         if (!material) return;
         
         const card = document.createElement('div');
@@ -2668,11 +2697,51 @@ function updateQuotationBoard() {
         `;
         quotationCards.appendChild(card);
     });
+
+    if (!sorted.length) {
+        const empty = document.createElement('div');
+        empty.className = 'quotation-board-empty';
+        empty.innerHTML =
+            '<p>当前没有「有效」对外报价卡片。首次发布或看板异常时，可点击下方按钮选择品种并填写报价。</p>' +
+            '<button type="button" class="btn btn-primary" onclick="openPickMaterialForQuotationModal()">' +
+            '<i class="fas fa-plus"></i> 发布对外报价</button>';
+        quotationCards.appendChild(empty);
+    }
+}
+
+/** 打开「选择品种」后进入设置报价（看板为空时也可维护报价） */
+function openPickMaterialForQuotationModal() {
+    const sel = document.getElementById('pick-material-quotation-select');
+    const modal = document.getElementById('pick-material-quotation-modal');
+    if (!sel || !modal) return;
+    if (!AppState.materials || !AppState.materials.length) {
+        showMessage('暂无品种数据，请先在基础资料中维护品种', 'error');
+        return;
+    }
+    sel.innerHTML = '';
+    sel.appendChild(new Option('请选择品种', ''));
+    const mats = [...AppState.materials].sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
+    mats.forEach((m) => {
+        sel.appendChild(new Option(`${m.code} - ${m.name}`, String(m.id)));
+    });
+    modal.style.display = 'block';
+}
+
+function confirmPickMaterialForQuotation() {
+    const sel = document.getElementById('pick-material-quotation-select');
+    if (!sel) return;
+    const materialId = parseInt(sel.value, 10);
+    if (!materialId) {
+        showMessage('请选择品种', 'error');
+        return;
+    }
+    closeModal('pick-material-quotation-modal');
+    showSetQuotationModal(materialId);
 }
 
 // 各品种最近一次报价时间（用于排序：优先展示最近有更新的品类）
 function latestQuotationTimeForMaterial(materialId) {
-    const qs = AppState.quotations.filter((q) => q.materialId === materialId);
+    const qs = AppState.quotations.filter((q) => Number(q.materialId) === Number(materialId));
     if (!qs.length) return 0;
     return Math.max(...qs.map((q) => parseQuotationDateTime(q.date)));
 }
@@ -2690,7 +2759,7 @@ function updateQuotationHistory() {
     
     materialsSorted.forEach((material) => {
         const materialQuotations = AppState.quotations
-            .filter((q) => q.materialId === material.id)
+            .filter((q) => Number(q.materialId) === Number(material.id))
             .sort((a, b) => parseQuotationDateTime(b.date) - parseQuotationDateTime(a.date))
             .slice(0, 5);
         
@@ -2705,6 +2774,11 @@ function updateQuotationHistory() {
                         '<span class="badge badge-success">有效</span>' : 
                         '<span class="badge badge-secondary">历史</span>'}
                 </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="showSetQuotationModal(${material.id})">
+                        <i class="fas fa-edit"></i> 更新
+                    </button>
+                </td>
             `;
             historyList.appendChild(row);
         });
@@ -2713,11 +2787,13 @@ function updateQuotationHistory() {
 
 // 显示设置报价模态框
 function showSetQuotationModal(materialId) {
-    const material = AppState.materials.find(m => m.id === materialId);
+    const material = AppState.materials.find((m) => Number(m.id) === Number(materialId));
     if (!material) return;
     
     // 获取当前有效报价
-    const activeQuotation = AppState.quotations.find(q => q.materialId === materialId && q.isActive);
+    const activeQuotation = AppState.quotations.find(
+        (q) => Number(q.materialId) === Number(materialId) && q.isActive
+    );
     
     // 填充表单
     document.getElementById('quotation-material').textContent = `${material.code} - ${material.name}`;
@@ -2760,7 +2836,7 @@ function saveQuotation(materialId) {
                 await window.InventoryApi.refreshAppStateFromServer(AppState);
                 document.getElementById('set-quotation-modal').style.display = 'none';
                 loadQuotationPage();
-                const material = AppState.materials.find(m => m.id === materialId);
+                const material = AppState.materials.find((m) => Number(m.id) === Number(materialId));
                 showMessage(`已发布${material?.name || ''}对外报价`, 'success');
             } catch (e) {
                 showMessage(e.message || '发布失败', 'error');
@@ -2771,7 +2847,7 @@ function saveQuotation(materialId) {
     
     // 将当前有效报价设为无效
     AppState.quotations.forEach(quotation => {
-        if (quotation.materialId === materialId && quotation.isActive) {
+        if (Number(quotation.materialId) === Number(materialId) && quotation.isActive) {
             quotation.isActive = false;
         }
     });
@@ -2805,7 +2881,7 @@ function saveQuotation(materialId) {
 
 // 显示报价历史
 function showQuotationHistory(materialId) {
-    const material = AppState.materials.find(m => m.id === materialId);
+    const material = AppState.materials.find((m) => Number(m.id) === Number(materialId));
     if (!material) return;
     
     const historyList = document.getElementById('quotation-history-list-modal');
@@ -2815,7 +2891,7 @@ function showQuotationHistory(materialId) {
     
     // 获取该品种的所有报价
     const materialQuotations = AppState.quotations
-        .filter(q => q.materialId === materialId)
+        .filter((q) => Number(q.materialId) === Number(materialId))
         .sort((a, b) => parseQuotationDateTime(b.date) - parseQuotationDateTime(a.date));
     
     materialQuotations.forEach(quotation => {
@@ -3210,7 +3286,7 @@ function refreshOutboundQuotationSelect() {
         return;
     }
     const list = AppState.quotations
-        .filter((q) => q.materialId === materialId)
+        .filter((q) => Number(q.materialId) === Number(materialId))
         .sort((a, b) => parseQuotationDateTime(b.date) - parseQuotationDateTime(a.date));
     if (!list.length) {
         sel.disabled = true;
