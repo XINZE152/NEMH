@@ -50,6 +50,15 @@
     }
     if (!res.ok) {
       let msg = (data && data.error) || res.statusText || '请求失败';
+      if (data && data.code) {
+        msg = '[' + data.code + '] ' + msg;
+      }
+      if (data && data.detail) {
+        msg += '（' + data.detail + '）';
+      }
+      if (data && data.path) {
+        msg += ' path=' + data.path;
+      }
       if (data && data.latestPurchaseUnitPrice != null) {
         const p = Number(data.latestPurchaseUnitPrice);
         if (Number.isFinite(p)) {

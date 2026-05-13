@@ -1,5 +1,8 @@
 import { run, all, get } from './db.js';
 import { requireStatisticsRole, requireWarehouseRole } from './auth.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.inboundOrders');
 
 function parsePositiveNumber(v) {
   const n = typeof v === 'string' ? parseFloat(v.trim()) : Number(v);
@@ -179,7 +182,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         pageSize,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询入库单失败' });
     }
   });
@@ -201,7 +204,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         latestPurchaseUnitPrice,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询入库单详情失败' });
     }
   });
@@ -323,7 +326,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '入库单号已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '创建入库单失败' });
     }
   }
@@ -362,7 +365,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
 
       res.json(await fetchInboundRow(db, id));
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '审核入库单失败' });
     }
   }
@@ -412,7 +415,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       );
       res.json(await fetchInboundRow(db, id));
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '驳回入库单失败' });
     }
   }

@@ -1,5 +1,16 @@
 import { run, all, get } from './db.js';
 import { requireWarehouseRole } from './auth.js';
+import { createLogger, sendServerError } from './logger.js';
+
+const log = createLogger('nemh.purchasePrices');
+
+/** 400：写入 api.log，响应带 code 便于前端区分 */
+function badRequest(req, res, message, code = 'VALIDATION_ERROR') {
+  log.warn(
+    `HTTP 400 ${req.method} ${req.originalUrl} code=${code} userId=${req.admin?.id ?? '-'}: ${message}`
+  );
+  return res.status(400).json({ error: message, code });
+}
 
 const PRICE_ROW_SQL = `SELECT pp.id,
         pp.material_id AS materialId,
@@ -87,7 +98,7 @@ async function fetchPriceRow(db, id) {
 }
 
 export function registerPurchasePriceRoutes(app, db, authMiddleware) {
-  app.get('/api/admin/materials', authMiddleware, async (_req, res) => {
+  app.get('/api/admin/materials', authMiddleware, async (req, res) => {
     try {
       const rows = await all(
         db,
@@ -109,8 +120,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
       );
       res.json(rows);
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: '查询品种失败' });
+      sendServerError(res, log, req, '查询品种失败', e, 'MATERIALS_QUERY_FAILED');
     }
   });
 
@@ -122,7 +132,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
       try {
         const materialId = Number(req.params.materialId);
         if (!Number.isInteger(materialId) || materialId < 1) {
-          return res.status(400).json({ error: '无效 materialId' });
+          return badRequest(req, res, '无效 materialId', 'INVALID_MATERIAL_ID');
         }
         const row = await get(
           db,
@@ -141,8 +151,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
         }
         res.json({ latest: row });
       } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: '查询最新收货定价失败' });
+        sendServerError(res, log, req, '查询最新收货定价失败', e, 'LATEST_PRICE_QUERY_FAILED');
       }
     }
   );
@@ -205,8 +214,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
         pageSize,
       });
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: '查询收货定价失败' });
+      sendServerError(res, log, req, '查询收货定价失败', e, 'PRICE_LIST_QUERY_FAILED');
     }
   });
 
@@ -220,23 +228,20 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
       const body = req.body || {};
       const lines = Array.isArray(body.lines) ? body.lines : null;
       if (!lines || lines.length === 0) {
-        return res
-          .status(400)
-          .json({ error: 'lines 不能为空，每项需包含 materialId 与 unitPrice（或 price）' });
+        return badRequest(
+          req,
+          res,
+          'lines 不能为空，每项需包含 materialId 与 unitPrice（或 price）',
+          'BATCH_LINES_EMPTY'
+        );
       }
 
       const enteredAt =
         pickEnteredAt(body) || new Date().toISOString();
+      /** 凭证可选：不传或空字符串时存空串（与前端「可不传凭证」一致） */
       const marketPriceProof = pickMarketProof(body);
       const receivePriceProof = pickReceiveProof(body);
       const description = pickDescription(body) || null;
-
-      if (!marketPriceProof) {
-        return res.status(400).json({ error: '请填写行情价凭证图片地址' });
-      }
-      if (!receivePriceProof) {
-        return res.status(400).json({ error: '请填写收货价格凭证图片地址' });
-      }
 
       const createdIds = [];
 
@@ -294,16 +299,15 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
       res.status(201).json({ count: prices.length, prices });
     } catch (e) {
       if (e.message === 'INVALID_MATERIAL') {
-        return res.status(400).json({ error: '每条 line 须包含有效 materialId' });
+        return badRequest(req, res, '每条 line 须包含有效 materialId', 'INVALID_LINE_MATERIAL');
       }
       if (e.message === 'INVALID_PRICE') {
-        return res.status(400).json({ error: '每条 line 的单价须为大于 0 的数字' });
+        return badRequest(req, res, '每条 line 的单价须为大于 0 的数字', 'INVALID_LINE_PRICE');
       }
       if (e.message === 'MATERIAL_NOT_FOUND') {
-        return res.status(400).json({ error: '品种不存在' });
+        return badRequest(req, res, '品种不存在', 'MATERIAL_NOT_FOUND');
       }
-      console.error(e);
-      res.status(500).json({ error: '批量创建收货定价失败' });
+      sendServerError(res, log, req, '批量创建收货定价失败', e, 'BATCH_CREATE_FAILED');
     }
   }
   );
@@ -312,14 +316,16 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
-        return res.status(400).json({ error: '无效 id' });
+        return badRequest(req, res, '无效 id', 'INVALID_ID');
       }
       const row = await fetchPriceRow(db, id);
-      if (!row) return res.status(404).json({ error: '记录不存在' });
+      if (!row) {
+        log.warn(`HTTP 404 ${req.method} ${req.originalUrl} userId=${req.admin?.id ?? '-'}`);
+        return res.status(404).json({ error: '记录不存在', code: 'NOT_FOUND' });
+      }
       res.json(row);
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: '查询收货定价失败' });
+      sendServerError(res, log, req, '查询收货定价失败', e, 'PRICE_GET_FAILED');
     }
   });
 
@@ -331,24 +337,27 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
-        return res.status(400).json({ error: '无效 id' });
+        return badRequest(req, res, '无效 id', 'INVALID_ID');
       }
       const existing = await get(db, 'SELECT * FROM purchase_prices WHERE id = ?', [
         id,
       ]);
-      if (!existing) return res.status(404).json({ error: '记录不存在' });
+      if (!existing) {
+        log.warn(`HTTP 404 PUT purchase-price id=${id} userId=${req.admin?.id ?? '-'}`);
+        return res.status(404).json({ error: '记录不存在', code: 'NOT_FOUND' });
+      }
 
       const body = req.body || {};
       let materialId = existing.material_id;
       if (body.materialId !== undefined || body.material_id !== undefined) {
         materialId = Number(body.materialId ?? body.material_id);
         if (!Number.isInteger(materialId) || materialId < 1) {
-          return res.status(400).json({ error: '无效 materialId' });
+          return badRequest(req, res, '无效 materialId', 'INVALID_MATERIAL_ID');
         }
         const material = await get(db, 'SELECT id FROM materials WHERE id = ?', [
           materialId,
         ]);
-        if (!material) return res.status(400).json({ error: '品种不存在' });
+        if (!material) return badRequest(req, res, '品种不存在', 'MATERIAL_NOT_FOUND');
       }
 
       let unitPrice = existing.unit_price;
@@ -361,7 +370,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
           body.unitPrice ?? body.price ?? body.unit_price
         );
         if (u === null) {
-          return res.status(400).json({ error: '单价须为大于 0 的数字' });
+          return badRequest(req, res, '单价须为大于 0 的数字', 'INVALID_UNIT_PRICE');
         }
         unitPrice = u;
       }
@@ -376,11 +385,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
         body.market_price_proof !== undefined ||
         body.priceProof !== undefined
       ) {
-        const m = pickMarketProof(body);
-        if (!m) {
-          return res.status(400).json({ error: '行情价凭证不能为空' });
-        }
-        marketPriceProof = m;
+        marketPriceProof = pickMarketProof(body);
       }
 
       let receivePriceProof = existing.receive_price_proof;
@@ -388,11 +393,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
         body.receivePriceProof !== undefined ||
         body.receive_price_proof !== undefined
       ) {
-        const r = pickReceiveProof(body);
-        if (!r) {
-          return res.status(400).json({ error: '收货价格凭证不能为空' });
-        }
-        receivePriceProof = r;
+        receivePriceProof = pickReceiveProof(body);
       }
 
       let description = existing.description;
@@ -425,8 +426,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
 
       res.json(await fetchPriceRow(db, id));
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: '更新收货定价失败' });
+      sendServerError(res, log, req, '更新收货定价失败', e, 'PRICE_UPDATE_FAILED');
     }
   }
   );
@@ -439,16 +439,16 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
-        return res.status(400).json({ error: '无效 id' });
+        return badRequest(req, res, '无效 id', 'INVALID_ID');
       }
       const result = await run(db, 'DELETE FROM purchase_prices WHERE id = ?', [id]);
       if (result.changes === 0) {
-        return res.status(404).json({ error: '记录不存在' });
+        log.warn(`HTTP 404 DELETE purchase-price id=${id} userId=${req.admin?.id ?? '-'}`);
+        return res.status(404).json({ error: '记录不存在', code: 'NOT_FOUND' });
       }
       res.status(204).send();
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: '删除收货定价失败' });
+      sendServerError(res, log, req, '删除收货定价失败', e, 'PRICE_DELETE_FAILED');
     }
   }
   );
@@ -471,23 +471,17 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
       const description = pickDescription(body) || null;
 
       if (!Number.isInteger(materialId) || materialId < 1) {
-        return res.status(400).json({ error: '请选择品种' });
+        return badRequest(req, res, '请选择品种', 'MISSING_MATERIAL');
       }
       if (unitPrice === null) {
-        return res.status(400).json({ error: '单价须为大于 0 的数字' });
-      }
-      if (!marketPriceProof) {
-        return res.status(400).json({ error: '请填写行情价凭证图片地址' });
-      }
-      if (!receivePriceProof) {
-        return res.status(400).json({ error: '请填写收货价格凭证图片地址' });
+        return badRequest(req, res, '单价须为大于 0 的数字', 'INVALID_UNIT_PRICE');
       }
 
       const material = await get(db, 'SELECT id FROM materials WHERE id = ?', [
         materialId,
       ]);
       if (!material) {
-        return res.status(400).json({ error: '品种不存在' });
+        return badRequest(req, res, '品种不存在', 'MATERIAL_NOT_FOUND');
       }
 
       const result = await run(
@@ -510,8 +504,7 @@ export function registerPurchasePriceRoutes(app, db, authMiddleware) {
 
       res.status(201).json(await fetchPriceRow(db, result.lastID));
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: '创建收货定价失败' });
+      sendServerError(res, log, req, '创建收货定价失败', e, 'PRICE_CREATE_FAILED');
     }
   }
   );

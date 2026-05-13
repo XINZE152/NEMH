@@ -1442,12 +1442,8 @@ function savePricing() {
     }
 
     if (useApiMode()) {
-        const market = (AppState.tempMarketImages && AppState.tempMarketImages[0]) || '';
-        const recv = (AppState.tempSelfImages && AppState.tempSelfImages[0]) || '';
-        if (!market || !recv) {
-            showMessage('对接后端时须上传「行情凭证」与「收货价格凭证」各至少一张（将使用图片 DataURL 作为地址）', 'error');
-            return;
-        }
+        const market = (AppState.tempMarketImages || []).filter(Boolean).join(',');
+        const recv = (AppState.tempSelfImages || []).filter(Boolean).join(',');
         const enteredAt = new Date(datetimeLocal).toISOString();
         void (async function () {
             try {
@@ -1565,12 +1561,8 @@ function updatePricing(id) {
     }
 
     if (useApiMode()) {
-        const market = (AppState.tempMarketImages && AppState.tempMarketImages[0]) || '';
-        const recv = (AppState.tempSelfImages && AppState.tempSelfImages[0]) || '';
-        if (!market || !recv) {
-            showMessage('请保留或重新上传行情凭证与收货凭证各至少一张', 'error');
-            return;
-        }
+        const market = (AppState.tempMarketImages || []).filter(Boolean).join(',');
+        const recv = (AppState.tempSelfImages || []).filter(Boolean).join(',');
         const enteredAt = new Date(datetimeLocal).toISOString();
         void (async function () {
             try {

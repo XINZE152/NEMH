@@ -1,4 +1,7 @@
 import { all } from './db.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.inventoryWarehouseReport');
 
 function roundTon(n) {
   return Number((Number(n) || 0).toFixed(2));
@@ -239,7 +242,7 @@ export function registerWarehouseStockReportRoutes(app, db, authMiddleware) {
           pageSize,
         });
       } catch (e) {
-        console.error(e);
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
         res.status(500).json({ error: '查询库房库存报表失败' });
       }
     }

@@ -225,8 +225,8 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 | 品种 | `materialId` / `material_id` |
 | 单价 | `unitPrice` / `price` / `unit_price`，须 **> 0** |
 | 录入时间 | `enteredAt` / `entered_at` / `priceDate` / `price_date` / `entryTime`；不传则当前 ISO 时间 |
-| 行情价凭证（URL 字符串，必填） | `marketPriceProof`, `market_price_proof`, `priceProof`, `行情价凭证` |
-| 收货价凭证（必填） | `receivePriceProof`, `receive_price_proof`, `selfReceivePriceProof`, `收货价格凭证` |
+| 行情价凭证（URL 或 DataURL 字符串，**可选**；多图可用英文逗号拼接） | `marketPriceProof`, `market_price_proof`, `priceProof`, `行情价凭证` |
+| 收货价凭证（**可选**；同上） | `receivePriceProof`, `receive_price_proof`, `selfReceivePriceProof`, `收货价格凭证` |
 | 说明 | `description`, `priceDescription`, `价格说明` |
 
 ### `POST /api/admin/purchase-prices/batch`（仅 `warehouse`）
@@ -252,7 +252,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `PUT /api/admin/purchase-prices/:id`（仅 `warehouse`）
 
-部分更新；凭证字段若传入则不能为空字符串。
+部分更新；凭证字段若传入则更新为新值，**允许传空字符串表示清空凭证**。
 
 ### `DELETE /api/admin/purchase-prices/:id`（仅 `warehouse`）
 

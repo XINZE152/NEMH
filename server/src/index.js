@@ -5,7 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import { initDb } from './db.js';
 import { createAuthMiddleware, tryLogin, logAuthHint } from './auth.js';
-import { createLogger, httpAccessLogMiddleware } from './logger.js';
+import { createLogger, httpAccessLogMiddleware, sendServerError } from './logger.js';
 import { registerUserAdminRoutes } from './adminUsers.js';
 import { registerPurchasePriceRoutes } from './purchasePrices.js';
 import { registerSalePriceRoutes } from './salePrices.js';
@@ -67,7 +67,7 @@ app.get('/openapi.json', (_req, res) => {
     const raw = fs.readFileSync(OPENAPI_PATH, 'utf8');
     res.type('application/json').send(raw);
   } catch (e) {
-    log.error(`读取 openapi.json 失败: ${e?.message || e}`);
+    log.error(`读取 openapi.json 失败: ${e?.stack || e?.message || e}`);
     res.status(500).json({ error: '无法读取 openapi.json' });
   }
 });
@@ -98,8 +98,7 @@ app.post('/api/admin/login', async (req, res) => {
     );
     res.json({ token: result.token, user: result.user });
   } catch (e) {
-    log.error(`登录异常: ${e?.message || e}`);
-    res.status(500).json({ error: '登录失败' });
+    sendServerError(res, log, req, '登录失败', e, 'LOGIN_FAILED');
   }
 });
 
@@ -117,6 +116,37 @@ async function main() {
   registerOutboundOrderRoutes(app, db, authMiddleware);
   registerWarehouseStockReportRoutes(app, db, authMiddleware);
   logAuthHint();
+
+  /** 未匹配的 /api/*（须在错误处理中间件之前） */
+  app.use((req, res) => {
+    if (req.path.startsWith('/api')) {
+      log.warn(`HTTP 404 ${req.method} ${req.originalUrl}（无匹配路由）`);
+      return res
+        .status(404)
+        .json({ error: '接口不存在', code: 'NOT_FOUND', path: req.originalUrl });
+    }
+    res.status(404).type('text').send('Not found');
+  });
+
+  /** 须最后注册：JSON 解析失败、未捕获异常 */
+  app.use((err, req, res, _next) => {
+    if (
+      err instanceof SyntaxError &&
+      'body' in err &&
+      (err.status === 400 || err.statusCode === 400)
+    ) {
+      log.warn(`HTTP 400 请求体非合法 JSON ${req.method} ${req.originalUrl}: ${err.message}`);
+      if (!res.headersSent) {
+        return res.status(400).json({
+          error: '请求 JSON 格式无效',
+          code: 'INVALID_JSON',
+          detail: err.message,
+        });
+      }
+    }
+    sendServerError(res, log, req, '服务器内部错误', err, 'UNHANDLED_EXCEPTION');
+  });
+
   app.listen(PORT, () => {
     log.info(`HTTP 服务已监听 http://localhost:${PORT}`);
     log.info(`Swagger UI http://localhost:${PORT}/docs`);

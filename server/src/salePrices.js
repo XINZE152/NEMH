@@ -1,5 +1,8 @@
 import { run, all, get } from './db.js';
 import { requireStatisticsPublish } from './auth.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.salePrices');
 
 function parsePositiveNumber(v) {
   const n = typeof v === 'string' ? parseFloat(v.trim()) : Number(v);
@@ -99,7 +102,7 @@ export function registerSalePriceRoutes(app, db, authMiddleware) {
         pageSize,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询对外报价失败' });
     }
   }
@@ -123,7 +126,7 @@ export function registerSalePriceRoutes(app, db, authMiddleware) {
         );
         res.json({ latest: mapSaleRow(row) });
       } catch (e) {
-        console.error(e);
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
         res.status(500).json({ error: '查询最新对外报价失败' });
       }
     }
@@ -157,7 +160,7 @@ export function registerSalePriceRoutes(app, db, authMiddleware) {
         );
         res.json({ latest: mapSaleRow(row) });
       } catch (e) {
-        console.error(e);
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
         res.status(500).json({ error: '查询最新对外报价失败' });
       }
     }
@@ -204,7 +207,7 @@ export function registerSalePriceRoutes(app, db, authMiddleware) {
 
         res.status(201).json(await fetchSaleRow(db, result.lastID));
       } catch (e) {
-        console.error(e);
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
         res.status(500).json({ error: '发布对外报价失败' });
       }
     }
@@ -220,7 +223,7 @@ export function registerSalePriceRoutes(app, db, authMiddleware) {
       if (!row) return res.status(404).json({ error: '记录不存在' });
       res.json(row);
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询对外报价失败' });
     }
   });

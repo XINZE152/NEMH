@@ -7,6 +7,7 @@
  *   LOG_LEVEL   — debug | info | warn | error，默认 info
  *   LOG_HTTP    — 设为 0 关闭每条 HTTP 访问日志，默认开启
  *   LOG_AUTH    — 设为 1 时在 debug 级别下对鉴权成功打一条业务日志（默认关闭，避免与 HTTP 行重复）
+ *   NEMH_EXPOSE_ERROR_DETAIL — 设为 1 时，500 类 JSON 响应附带 `detail`（异常 message）；非 production 时默认附带
  */
 
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2, debug: 3 };
@@ -90,6 +91,30 @@ export function createLogger(name) {
 }
 
 const httpLogger = createLogger('nemh.http');
+
+/** 是否在 JSON 中向客户端返回 `detail`（便于联调；生产可关） */
+export function exposeErrorDetail() {
+  return (
+    process.env.NEMH_EXPOSE_ERROR_DETAIL === '1' ||
+    String(process.env.NODE_ENV || '').toLowerCase() !== 'production'
+  );
+}
+
+/**
+ * 记录并返回 500：日志含 method、URL、堆栈；响应含 error、code，可选 detail
+ */
+export function sendServerError(res, log, req, userFacingMessage, err, code = 'INTERNAL_ERROR') {
+  const e = err || new Error('unknown');
+  const msg = e?.message || String(e);
+  const stack = e?.stack || '';
+  const who = req?.admin?.id != null ? `userId=${req.admin.id}` : 'userId=-';
+  log.error(
+    `HTTP 500 ${code} ${req?.method || '?'} ${req?.originalUrl || '?'} ${who} msg=${msg}${stack ? '\n' + stack : ''}`
+  );
+  const body = { error: userFacingMessage, code };
+  if (exposeErrorDetail()) body.detail = msg;
+  if (!res.headersSent) res.status(500).json(body);
+}
 
 export function httpAccessLogMiddleware() {
   return (req, res, next) => {

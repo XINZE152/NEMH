@@ -1,4 +1,7 @@
 import { run, all, get } from './db.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.warehouses');
 
 function isUniqueConstraint(err) {
   return (
@@ -44,7 +47,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       const rows = await all(db, sql, params);
       res.json(rows.map(mapWarehouseRow));
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询库房失败' });
     }
   });
@@ -67,7 +70,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       if (!row) return res.status(404).json({ error: '库房不存在' });
       res.json(mapWarehouseRow(row));
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询库房失败' });
     }
   });
@@ -101,7 +104,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '库房代码已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '创建库房失败' });
     }
   });
@@ -179,7 +182,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '库房代码已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '更新库房失败' });
     }
   });
@@ -229,7 +232,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       if (result.changes === 0) return res.status(404).json({ error: '库房不存在' });
       res.status(204).send();
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '删除库房失败' });
     }
   });

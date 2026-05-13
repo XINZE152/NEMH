@@ -1,6 +1,9 @@
 import { run, all, get } from './db.js';
 import { requireWarehouseRole } from './auth.js';
 import { parseWeighbridgeText } from './weighbridgeParse.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.outboundOrders');
 
 function parsePositiveNumber(v) {
   const n = typeof v === 'string' ? parseFloat(v.trim()) : Number(v);
@@ -217,7 +220,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
         ...parsed,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '解析磅单失败' });
     }
   }
@@ -273,7 +276,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
         pageSize,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询出库单失败' });
     }
   });
@@ -292,7 +295,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
         defaultOutboundUnitPrice: defaultQuote,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询出库单详情失败' });
     }
   });
@@ -411,7 +414,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '出库单号已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '创建出库单失败' });
     }
   }
@@ -509,7 +512,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
         const detail = await fetchOutboundDetail(db, id);
         res.json(detail);
       } catch (e) {
-        console.error(e);
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
         res.status(500).json({ error: '确认实际出库失败' });
       }
     }
@@ -542,7 +545,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
       await run(db, 'DELETE FROM outbound_orders WHERE id = ?', [id]);
       res.status(204).send();
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '删除出库单失败' });
     }
   }

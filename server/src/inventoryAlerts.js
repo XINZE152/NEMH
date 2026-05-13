@@ -1,4 +1,7 @@
 import { all } from './db.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.inventoryAlerts');
 
 const DEFAULT_THRESHOLD_TON = 30;
 
@@ -126,7 +129,7 @@ export function registerInventoryAlertRoutes(app, db, authMiddleware) {
         items,
       });
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询入库汇总预警失败' });
     }
   });

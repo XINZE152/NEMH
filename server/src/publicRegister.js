@@ -1,5 +1,8 @@
 import { run, get } from './db.js';
 import { hashPassword } from './auth.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.publicRegister');
 
 const USERNAME_MAX = 64;
 
@@ -50,7 +53,7 @@ export function registerPublicRegisterRoute(app, db) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '用户名已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '注册失败' });
     }
   });

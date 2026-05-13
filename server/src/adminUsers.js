@@ -1,5 +1,8 @@
 import { run, all, get } from './db.js';
 import { hashPassword, USER_ROLES, requireStatisticsRole } from './auth.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('nemh.adminUsers');
 
 function parseUserRoleInput(v, fallback = 'warehouse') {
   if (v === undefined || v === null || v === '') return fallback;
@@ -17,7 +20,7 @@ function isUniqueConstraint(err) {
 }
 
 export function registerUserAdminRoutes(app, db, authMiddleware) {
-  app.get('/api/admin/users', authMiddleware, requireStatisticsRole, async (_req, res) => {
+  app.get('/api/admin/users', authMiddleware, requireStatisticsRole, async (req, res) => {
     try {
       const rows = await all(
         db,
@@ -25,7 +28,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
       );
       res.json(rows);
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询用户失败' });
     }
   });
@@ -65,7 +68,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '用户名已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '创建用户失败' });
     }
   });
@@ -154,7 +157,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '用户名已存在' });
       }
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '更新用户失败' });
     }
   }
@@ -180,7 +183,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
       if (result.changes === 0) return res.status(404).json({ error: '用户不存在' });
       res.status(204).send();
     } catch (e) {
-      console.error(e);
+      log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '删除用户失败' });
     }
   }
