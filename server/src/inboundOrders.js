@@ -125,6 +125,85 @@ async function fetchInboundRow(db, id) {
   return mapInboundRow(row);
 }
 
+function parseInboundPhotoFromBody(body) {
+  if (body.photo !== undefined) {
+    return typeof body.photo === 'string' ? body.photo.trim() : '';
+  }
+  if (body.inboundPhoto !== undefined) {
+    return typeof body.inboundPhoto === 'string' ? body.inboundPhoto.trim() : '';
+  }
+  return undefined;
+}
+
+/** 创建/修改入库单共用字段校验（不含 orderNo） */
+async function validateInboundPayload(db, body) {
+  const materialId = Number(body.materialId ?? body.material_id);
+  const weight = parsePositiveNumber(body.weight);
+  const unitPrice = parsePositiveNumber(
+    body.unitPrice ?? body.unit_price ?? body.price
+  );
+  const photo = parseInboundPhotoFromBody(body);
+  const inboundAtRaw = body.inboundAt ?? body.inbound_at ?? body.inboundTime;
+  const inboundAt =
+    inboundAtRaw === undefined || inboundAtRaw === null || inboundAtRaw === ''
+      ? null
+      : normalizeInboundAt(inboundAtRaw);
+
+  if (!Number.isInteger(materialId) || materialId < 1) {
+    return { error: '请选择品种', status: 400 };
+  }
+  if (weight === null) {
+    return { error: '重量须为大于 0 的数字', status: 400 };
+  }
+  if (unitPrice === null) {
+    return { error: '单价须为大于 0 的数字', status: 400 };
+  }
+
+  const material = await get(db, 'SELECT id FROM materials WHERE id = ?', [
+    materialId,
+  ]);
+  if (!material) {
+    return { error: '品种不存在', status: 400 };
+  }
+
+  const warehouseId = Number(body.warehouseId ?? body.warehouse_id ?? 1);
+  if (!Number.isInteger(warehouseId) || warehouseId < 1) {
+    return { error: '无效库房', status: 400 };
+  }
+  const warehouse = await get(db, 'SELECT id FROM warehouses WHERE id = ?', [
+    warehouseId,
+  ]);
+  if (!warehouse) {
+    return { error: '库房不存在', status: 400 };
+  }
+
+  const latestPurchase = await getLatestPurchaseUnitPrice(db, materialId);
+  if (latestPurchase === null || latestPurchase === undefined) {
+    return { error: '该品种暂无收货定价，无法提交入库', status: 400 };
+  }
+  if (!unitPricesMatch(unitPrice, latestPurchase)) {
+    return {
+      error: '录入单价必须与当前品种最新收货定价一致，请核对后重试',
+      status: 400,
+      latestPurchaseUnitPrice: Number(Number(latestPurchase).toFixed(2)),
+    };
+  }
+
+  if (inboundAtRaw !== undefined && inboundAtRaw !== null && inboundAtRaw !== '' && !inboundAt) {
+    return { error: '入库时间格式无效', status: 400 };
+  }
+
+  return {
+    materialId,
+    weight,
+    unitPrice,
+    warehouseId,
+    photo,
+    inboundAt,
+    totalAmount: roundMoney(weight * unitPrice),
+  };
+}
+
 export function registerInboundOrderRoutes(app, db, authMiddleware) {
   app.get('/api/admin/inbound-orders', authMiddleware, async (req, res) => {
     try {
@@ -216,20 +295,25 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
     async (req, res) => {
     try {
       const body = req.body || {};
-      const materialId = Number(body.materialId ?? body.material_id);
-      const weight = parsePositiveNumber(body.weight);
-      const unitPrice = parsePositiveNumber(
-        body.unitPrice ?? body.unit_price ?? body.price
-      );
+      const validated = await validateInboundPayload(db, body);
+      if (validated.error) {
+        const payload = { error: validated.error };
+        if (validated.latestPurchaseUnitPrice != null) {
+          payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
+        }
+        return res.status(validated.status).json(payload);
+      }
+
+      const {
+        materialId,
+        weight,
+        unitPrice,
+        warehouseId,
+        totalAmount,
+      } = validated;
       const photo =
-        typeof body.photo === 'string'
-          ? body.photo.trim()
-          : typeof body.inboundPhoto === 'string'
-            ? body.inboundPhoto.trim()
-            : '';
-      const inboundAt =
-        normalizeInboundAt(body.inboundAt ?? body.inbound_at ?? body.inboundTime) ||
-        new Date().toISOString();
+        validated.photo !== undefined ? validated.photo : '';
+      const inboundAt = validated.inboundAt || new Date().toISOString();
 
       let orderNo =
         typeof body.orderNo === 'string'
@@ -254,49 +338,6 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
           return res.status(500).json({ error: '生成入库单号失败，请重试' });
         }
       }
-
-      if (!Number.isInteger(materialId) || materialId < 1) {
-        return res.status(400).json({ error: '请选择品种' });
-      }
-      if (weight === null) {
-        return res.status(400).json({ error: '重量须为大于 0 的数字' });
-      }
-      if (unitPrice === null) {
-        return res.status(400).json({ error: '单价须为大于 0 的数字' });
-      }
-
-      const material = await get(db, 'SELECT id FROM materials WHERE id = ?', [
-        materialId,
-      ]);
-      if (!material) {
-        return res.status(400).json({ error: '品种不存在' });
-      }
-
-      const warehouseId = Number(body.warehouseId ?? body.warehouse_id ?? 1);
-      if (!Number.isInteger(warehouseId) || warehouseId < 1) {
-        return res.status(400).json({ error: '无效库房' });
-      }
-      const warehouse = await get(db, 'SELECT id FROM warehouses WHERE id = ?', [
-        warehouseId,
-      ]);
-      if (!warehouse) {
-        return res.status(400).json({ error: '库房不存在' });
-      }
-
-      const latestPurchase = await getLatestPurchaseUnitPrice(db, materialId);
-      if (latestPurchase === null || latestPurchase === undefined) {
-        return res
-          .status(400)
-          .json({ error: '该品种暂无收货定价，无法提交入库' });
-      }
-      if (!unitPricesMatch(unitPrice, latestPurchase)) {
-        return res.status(400).json({
-          error: '录入单价必须与当前品种最新收货定价一致，请核对后重试',
-          latestPurchaseUnitPrice: Number(Number(latestPurchase).toFixed(2)),
-        });
-      }
-
-      const totalAmount = roundMoney(weight * unitPrice);
 
       const result = await run(
         db,
@@ -327,6 +368,81 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       res.status(500).json({ error: '创建入库单失败' });
     }
   }
+  );
+
+  app.put(
+    '/api/admin/inbound-orders/:id',
+    authMiddleware,
+    requireWarehouseRole,
+    async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id < 1) {
+          return res.status(400).json({ error: '无效 id' });
+        }
+        const existing = await get(db, 'SELECT * FROM inbound_orders WHERE id = ?', [
+          id,
+        ]);
+        if (!existing) return res.status(404).json({ error: '入库单不存在' });
+        if (existing.audit_status !== 'pending') {
+          return res.status(400).json({ error: '仅待审核状态的入库单可修改' });
+        }
+        const linked = await get(
+          db,
+          'SELECT 1 AS x FROM outbound_fifo_lines WHERE inbound_order_id = ? LIMIT 1',
+          [id]
+        );
+        if (linked) {
+          return res.status(400).json({ error: '已存在出库子单关联，不可修改' });
+        }
+
+        const body = req.body || {};
+        const validated = await validateInboundPayload(db, body);
+        if (validated.error) {
+          const payload = { error: validated.error };
+          if (validated.latestPurchaseUnitPrice != null) {
+            payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
+          }
+          return res.status(validated.status).json(payload);
+        }
+
+        const photo =
+          validated.photo !== undefined ? validated.photo : existing.photo;
+        const inboundAt =
+          validated.inboundAt != null
+            ? validated.inboundAt
+            : existing.inbound_at;
+
+        await run(
+          db,
+          `UPDATE inbound_orders SET
+             warehouse_id = ?,
+             material_id = ?,
+             weight = ?,
+             unit_price = ?,
+             total_amount = ?,
+             photo = ?,
+             inbound_at = ?,
+             updated_at = datetime('now')
+           WHERE id = ?`,
+          [
+            validated.warehouseId,
+            validated.materialId,
+            validated.weight,
+            validated.unitPrice,
+            validated.totalAmount,
+            photo ?? '',
+            inboundAt,
+            id,
+          ]
+        );
+
+        res.json(await fetchInboundRow(db, id));
+      } catch (e) {
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
+        res.status(500).json({ error: '修改入库单失败' });
+      }
+    }
   );
 
   app.put(

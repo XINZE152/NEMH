@@ -373,6 +373,9 @@
     createInbound: function (body) {
       return apiFetch('/api/admin/inbound-orders', { method: 'POST', body: body });
     },
+    updateInbound: function (id, body) {
+      return apiFetch('/api/admin/inbound-orders/' + id, { method: 'PUT', body: body });
+    },
     deleteInbound: function (id) {
       return apiFetch('/api/admin/inbound-orders/' + id, { method: 'DELETE' });
     },

@@ -2086,10 +2086,6 @@ function viewInbound(id) {
 
 // 编辑入库单
 function editInbound(id) {
-    if (useApiMode()) {
-        showMessage('对接后端时不支持修改入库单，请驳回后重新创建', 'info');
-        return;
-    }
     const order = AppState.inboundOrders.find(o => o.id === id);
     if (!order || order.status !== 'pending') return;
     
@@ -2144,10 +2140,6 @@ function editInbound(id) {
 
 // 更新入库单
 function updateInbound(id) {
-    if (useApiMode()) {
-        showMessage('对接后端时不支持修改入库单', 'info');
-        return;
-    }
     const materialId = parseInt(document.getElementById('inbound-material').value);
     const warehouseId = parseInt(document.getElementById('inbound-warehouse').value);
     const weight = parseFloat(document.getElementById('inbound-weight').value);
@@ -2156,6 +2148,51 @@ function updateInbound(id) {
 
     if (!materialId || !warehouseId || !weight || !unitPrice || !dtLocal) {
         showMessage('请填写完整信息', 'error');
+        return;
+    }
+
+    if (useApiMode()) {
+        const orderBefore = AppState.inboundOrders.find((o) => o.id === id);
+        if (!orderBefore) return;
+        if (orderBefore.status !== 'pending') {
+            showMessage('只能修改待审核状态的入库单', 'error');
+            return;
+        }
+        const imgs =
+            AppState.tempInboundImages && AppState.tempInboundImages.length
+                ? AppState.tempInboundImages
+                : [];
+        const photo = imgs.length ? imgs.join(',') : '';
+        const inboundAt = new Date(dtLocal).toISOString();
+        const label = orderBefore.orderNo || '#' + id;
+        void (async function () {
+            try {
+                await window.InventoryApi.updateInbound(id, {
+                    warehouseId: warehouseId,
+                    materialId: materialId,
+                    weight: weight,
+                    unitPrice: unitPrice,
+                    photo: photo,
+                    inboundAt: inboundAt,
+                });
+                await window.InventoryApi.refreshAppStateFromServer(AppState);
+                AppState.tempInboundImages = [];
+                const modalEl = document.getElementById('add-inbound-modal');
+                if (modalEl) modalEl.style.display = 'none';
+                const saveBtnReset =
+                    modalEl && modalEl.querySelector('.modal-footer .btn-primary');
+                if (saveBtnReset) {
+                    saveBtnReset.onclick = saveInbound;
+                    saveBtnReset.textContent = '保存';
+                }
+                loadInboundPage();
+                updateDashboardStats();
+                showMessage('已更新入库单 ' + label, 'success');
+                addAction('inbound', '更新入库单（API） ' + label);
+            } catch (e) {
+                showMessage(e.message || '更新失败', 'error');
+            }
+        })();
         return;
     }
 

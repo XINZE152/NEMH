@@ -328,6 +328,16 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **成功 201。** **409：** 单号重复。
 
+### `PUT /api/admin/inbound-orders/:id`（仅 `warehouse`）
+
+修改入库单。仅 `audit_status === 'pending'` 可操作；若已存在 `outbound_fifo_lines` 关联则不可修改。
+
+**请求体：** 与 `POST` 相同（`materialId`、`weight`、`unitPrice` 必填；`photo` / `inboundPhoto`、`inboundAt`、`warehouseId` 可选）。不传 `photo` / `inboundPhoto` 时保留原照片。
+
+**规则：** 单价须与当前品种最新收货定价一致（同创建）。
+
+**成功 200：** 返回更新后的入库单对象。
+
 ### `PUT /api/admin/inbound-orders/:id/approve`（仅 `statistics`）
 
 待审核 → 已通过（展示语义为「已审核待出库」）。仅 `audit_status === 'pending'` 可操作。

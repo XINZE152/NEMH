@@ -987,6 +987,57 @@
           }
         }
       },
+      "put": {
+        "tags": ["入库单"],
+        "summary": "修改入库单（库房；仅待审核、无出库 FIFO 关联）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "materialId": 1,
+                "warehouseId": 1,
+                "weight": 10,
+                "unitPrice": 159456,
+                "photo": "",
+                "inboundAt": "2026-05-15T06:46:26.000Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后入库单",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "orderNo": "RK-20260515-9220",
+                  "auditStatus": "pending"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "非待审核、定价不一致或已有出库关联",
+            "content": {
+              "application/json": {
+                "example": { "error": "仅待审核状态的入库单可修改" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "不存在",
+            "content": {
+              "application/json": { "example": { "error": "入库单不存在" } }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": ["入库单"],
         "summary": "删除入库单（库房；仅待审核、无出库 FIFO 关联）",
