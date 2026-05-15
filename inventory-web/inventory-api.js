@@ -211,7 +211,8 @@
     if (st === 'approved') status = 'approved';
     else if (st === 'rejected') status = 'rejected';
     const inboundAt = io.inboundAt || io.inbound_at || '';
-    const photo = io.photo || io.inboundPhoto || '';
+    const photoRaw = io.photo != null ? io.photo : io.inboundPhoto;
+    const photo = typeof photoRaw === 'string' ? photoRaw.trim() : '';
     const images = splitCombinedImageUrls(photo);
     return {
       id: io.id,
@@ -223,6 +224,8 @@
       totalPrice: Number(io.totalAmount != null ? io.totalAmount : io.total_amount),
       status,
       date: inboundAt || formatApiTimeToDisplay(io.createdAt),
+      /** 多图仍以逗号拼接存库；展示时需配合 splitCombinedImageUrls，禁止简单 split(',') */
+      photo,
       images,
       reviewerId: io.reviewedBy != null ? io.reviewedBy : io.reviewed_by,
       reviewerUsername: io.reviewerUsername || io.reviewer_username || '',
@@ -357,6 +360,7 @@
     login: login,
     refreshAppStateFromServer: refreshAppStateFromServer,
     apiFetch: apiFetch,
+    splitCombinedImageUrls: splitCombinedImageUrls,
     createPurchasePrice: function (body) {
       return apiFetch('/api/admin/purchase-prices', { method: 'POST', body: body });
     },

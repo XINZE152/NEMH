@@ -330,12 +330,32 @@ function loadFromLocalStorage() {
 const PRICING_MAX_IMAGES_PER_GROUP = 20;
 const INBOUND_MAX_IMAGES = 20;
 
-/** 入庫單照片：統一為 images[]，兼容舊單張 image */
+/**
+ * 多图入库 photo 字段用英文逗号拼接；单张 Data URL 形如 data:image/png;base64,xxxx，
+ * 逗号在「base64,」处——若对整个字符串 split(',') 会把每张图拆成两段（因而 2 张变 4 个无效 src）。
+ * 与 inventory-api.js 中 splitCombinedImageUrls 保持一致。
+ */
+function splitInboundStoredPhotos(storage) {
+    if (!storage || typeof storage !== 'string') return [];
+    const s = storage.trim();
+    if (!s) return [];
+    return s
+        .split(/,(?=(?:data:|https?:\/\/))/i)
+        .map((x) => x.trim())
+        .filter(Boolean);
+}
+
+/** 入庫單照片：統一為 images[]，兼容舊單張 image；對接後端時優先按原始 photo 再拆分 */
 function inboundOrderImages(order) {
     if (!order) return [];
+    const raw =
+        (typeof order.photo === 'string' && order.photo.trim()) ||
+        (typeof order.inboundPhoto === 'string' && order.inboundPhoto.trim()) ||
+        '';
+    if (raw) return splitInboundStoredPhotos(raw);
     const arr = Array.isArray(order.images) ? order.images.filter(Boolean) : [];
     if (arr.length) return arr;
-    if (order.image) return [order.image];
+    if (order.image) return splitInboundStoredPhotos(String(order.image).trim()) || [order.image];
     return [];
 }
 
