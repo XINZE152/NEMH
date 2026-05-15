@@ -380,7 +380,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **请求体：** `warehouseId`（默认 1）, `materialId`, `plannedWeight`（>0）, `unitPrice`（可选；不传则尝试用当日/最新对外报价）, `orderNo`（可选，不传则生成 `CK-YYYYMMDD-####`）。
 
-**失败 400 示例：** 库存不足，体中可能含 `shortfall`。
+**失败 400 示例：** 库存不足（`code`: `FIFO_INSUFFICIENT`），体中可能含 `shortfall`、`availableWeight`、`plannedWeight` 等。服务端 `api.log` 中可检索 `nemh.api` 查看 FIFO 明细（已审核行、待审核数量等）。
 
 ### `PUT /api/admin/outbound-orders/:id/complete`（仅 `warehouse`）
 

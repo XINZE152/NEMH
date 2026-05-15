@@ -1,6 +1,6 @@
 import { run, all, get } from './db.js';
 import { requireStatisticsRole, requireWarehouseRole } from './auth.js';
-import { createLogger } from './logger.js';
+import { createLogger, setApiLogContext } from './logger.js';
 
 const log = createLogger('nemh.inboundOrders');
 
@@ -150,47 +150,66 @@ async function validateInboundPayload(db, body) {
       : normalizeInboundAt(inboundAtRaw);
 
   if (!Number.isInteger(materialId) || materialId < 1) {
-    return { error: '请选择品种', status: 400 };
+    return { error: '请选择品种', status: 400, code: 'INVALID_MATERIAL' };
   }
   if (weight === null) {
-    return { error: '重量须为大于 0 的数字', status: 400 };
+    return { error: '重量须为大于 0 的数字', status: 400, code: 'INVALID_WEIGHT' };
   }
   if (unitPrice === null) {
-    return { error: '单价须为大于 0 的数字', status: 400 };
+    return { error: '单价须为大于 0 的数字', status: 400, code: 'INVALID_UNIT_PRICE' };
   }
 
   const material = await get(db, 'SELECT id FROM materials WHERE id = ?', [
     materialId,
   ]);
   if (!material) {
-    return { error: '品种不存在', status: 400 };
+    return {
+      error: '品种不存在',
+      status: 400,
+      code: 'MATERIAL_NOT_FOUND',
+      materialId,
+    };
   }
 
   const warehouseId = Number(body.warehouseId ?? body.warehouse_id ?? 1);
   if (!Number.isInteger(warehouseId) || warehouseId < 1) {
-    return { error: '无效库房', status: 400 };
+    return { error: '无效库房', status: 400, code: 'INVALID_WAREHOUSE', warehouseId };
   }
   const warehouse = await get(db, 'SELECT id FROM warehouses WHERE id = ?', [
     warehouseId,
   ]);
   if (!warehouse) {
-    return { error: '库房不存在', status: 400 };
+    return {
+      error: '库房不存在',
+      status: 400,
+      code: 'WAREHOUSE_NOT_FOUND',
+      warehouseId,
+    };
   }
 
   const latestPurchase = await getLatestPurchaseUnitPrice(db, materialId);
   if (latestPurchase === null || latestPurchase === undefined) {
-    return { error: '该品种暂无收货定价，无法提交入库', status: 400 };
+    return {
+      error: '该品种暂无收货定价，无法提交入库',
+      status: 400,
+      code: 'NO_PURCHASE_PRICE',
+      materialId,
+    };
   }
   if (!unitPricesMatch(unitPrice, latestPurchase)) {
     return {
       error: '录入单价必须与当前品种最新收货定价一致，请核对后重试',
       status: 400,
+      code: 'UNIT_PRICE_MISMATCH',
+      materialId,
+      warehouseId,
+      enteredUnitPrice: unitPrice,
       latestPurchaseUnitPrice: Number(Number(latestPurchase).toFixed(2)),
     };
   }
 
   if (inboundAtRaw !== undefined && inboundAtRaw !== null && inboundAtRaw !== '' && !inboundAt) {
-    return { error: '入库时间格式无效', status: 400 };
+    return { error: '入库时间格式无效', status: 400, code: 'INVALID_INBOUND_AT' };
   }
 
   return {
@@ -202,6 +221,23 @@ async function validateInboundPayload(db, body) {
     inboundAt,
     totalAmount: roundMoney(weight * unitPrice),
   };
+}
+
+function respondInboundValidationError(res, validated) {
+  const payload = {
+    error: validated.error,
+    code: validated.code || 'VALIDATION_ERROR',
+  };
+  if (validated.latestPurchaseUnitPrice != null) {
+    payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
+  }
+  setApiLogContext(res, {
+    materialId: validated.materialId,
+    warehouseId: validated.warehouseId,
+    enteredUnitPrice: validated.enteredUnitPrice,
+    latestPurchaseUnitPrice: validated.latestPurchaseUnitPrice,
+  });
+  return res.status(validated.status || 400).json(payload);
 }
 
 export function registerInboundOrderRoutes(app, db, authMiddleware) {
@@ -297,11 +333,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       const body = req.body || {};
       const validated = await validateInboundPayload(db, body);
       if (validated.error) {
-        const payload = { error: validated.error };
-        if (validated.latestPurchaseUnitPrice != null) {
-          payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
-        }
-        return res.status(validated.status).json(payload);
+        return respondInboundValidationError(res, validated);
       }
 
       const {
@@ -385,7 +417,15 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         ]);
         if (!existing) return res.status(404).json({ error: '入库单不存在' });
         if (existing.audit_status !== 'pending') {
-          return res.status(400).json({ error: '仅待审核状态的入库单可修改' });
+          setApiLogContext(res, {
+            inboundOrderId: id,
+            orderNo: existing.order_no,
+            auditStatus: existing.audit_status,
+          });
+          return res.status(400).json({
+            error: '仅待审核状态的入库单可修改',
+            code: 'INBOUND_NOT_PENDING',
+          });
         }
         const linked = await get(
           db,
@@ -393,17 +433,17 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
           [id]
         );
         if (linked) {
-          return res.status(400).json({ error: '已存在出库子单关联，不可修改' });
+          setApiLogContext(res, { inboundOrderId: id, orderNo: existing.order_no });
+          return res.status(400).json({
+            error: '已存在出库子单关联，不可修改',
+            code: 'INBOUND_LINKED_OUTBOUND',
+          });
         }
 
         const body = req.body || {};
         const validated = await validateInboundPayload(db, body);
         if (validated.error) {
-          const payload = { error: validated.error };
-          if (validated.latestPurchaseUnitPrice != null) {
-            payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
-          }
-          return res.status(validated.status).json(payload);
+          return respondInboundValidationError(res, validated);
         }
 
         const photo =

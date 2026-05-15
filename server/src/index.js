@@ -5,7 +5,12 @@ import express from 'express';
 import cors from 'cors';
 import { initDb } from './db.js';
 import { createAuthMiddleware, tryLogin, logAuthHint } from './auth.js';
-import { createLogger, httpAccessLogMiddleware, sendServerError } from './logger.js';
+import {
+  createLogger,
+  httpAccessLogMiddleware,
+  clientErrorCaptureMiddleware,
+  sendServerError,
+} from './logger.js';
 import { registerUserAdminRoutes } from './adminUsers.js';
 import { registerPurchasePriceRoutes } from './purchasePrices.js';
 import { registerSalePriceRoutes } from './salePrices.js';
@@ -55,6 +60,7 @@ app.use(cors({ origin: true }));
 /** 磅单等字段可能为 data URL（前端允许 ≤4MB 图片，base64 后更大），须高于默认 ~100kb */
 const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '12mb';
 app.use(express.json({ limit: jsonBodyLimit }));
+app.use(clientErrorCaptureMiddleware());
 app.use(httpAccessLogMiddleware());
 
 let db;
