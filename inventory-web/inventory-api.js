@@ -138,9 +138,25 @@
     return { user, role };
   }
 
+  /**
+   * 多图在库里用英文逗号拼接（与 app.js 中 imgs.join(',') 一致）。
+   * 单张 Data URL 形如 data:image/png;base64,xxxx —— 逗号在「base64,」处，不能整段 split(',')。
+   * 仅当逗号后为另一张图的开头（data: 或 http(s)）时才拆分。
+   */
+  function splitCombinedImageUrls(storage) {
+    if (!storage || typeof storage !== 'string') return [];
+    const s = storage.trim();
+    if (!s) return [];
+    return s
+      .split(/,(?=(?:data:|https?:\/\/))/i)
+      .map(function (x) {
+        return x.trim();
+      })
+      .filter(Boolean);
+  }
+
   function proofToImages(url) {
-    if (!url || typeof url !== 'string') return [];
-    return [url];
+    return splitCombinedImageUrls(url);
   }
 
   function normalizeMaterial(m) {
@@ -196,9 +212,7 @@
     else if (st === 'rejected') status = 'rejected';
     const inboundAt = io.inboundAt || io.inbound_at || '';
     const photo = io.photo || io.inboundPhoto || '';
-    const images = photo
-      ? photo.split(',').map((s) => s.trim()).filter(Boolean)
-      : [];
+    const images = splitCombinedImageUrls(photo);
     return {
       id: io.id,
       orderNo: io.orderNo || io.order_no,
