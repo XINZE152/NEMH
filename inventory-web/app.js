@@ -345,6 +345,32 @@ function splitInboundStoredPhotos(storage) {
         .filter(Boolean);
 }
 
+/** 修复旧版 split(',') 误拆：data:image/png;base64 + iVBORw0... → 完整 Data URL */
+function repairInboundImageFragments(parts) {
+    if (!Array.isArray(parts) || !parts.length) return [];
+    const out = [];
+    for (let i = 0; i < parts.length; i++) {
+        const cur = String(parts[i] || '').trim();
+        if (!cur) continue;
+        const isDataHeaderOnly = /^data:image\/[^;]+;base64$/i.test(cur);
+        const next = i + 1 < parts.length ? String(parts[i + 1] || '').trim() : '';
+        if (isDataHeaderOnly && next && !/^data:/i.test(next) && !/^https?:\/\//i.test(next)) {
+            out.push(`${cur},${next}`);
+            i += 1;
+            continue;
+        }
+        if (/^data:/i.test(cur) || /^https?:\/\//i.test(cur)) {
+            out.push(cur);
+            continue;
+        }
+        const prev = out[out.length - 1];
+        if (prev && /^data:image\/[^;]+;base64$/i.test(prev)) {
+            out[out.length - 1] = `${prev},${cur}`;
+        }
+    }
+    return out;
+}
+
 /** 入庫單照片：統一為 images[]，兼容舊單張 image；對接後端時優先按原始 photo 再拆分 */
 function inboundOrderImages(order) {
     if (!order) return [];
@@ -354,8 +380,11 @@ function inboundOrderImages(order) {
         '';
     if (raw) return splitInboundStoredPhotos(raw);
     const arr = Array.isArray(order.images) ? order.images.filter(Boolean) : [];
-    if (arr.length) return arr;
-    if (order.image) return splitInboundStoredPhotos(String(order.image).trim()) || [order.image];
+    if (arr.length) return repairInboundImageFragments(arr);
+    if (order.image) {
+        const one = String(order.image).trim();
+        return repairInboundImageFragments(splitInboundStoredPhotos(one).length ? splitInboundStoredPhotos(one) : [one]);
+    }
     return [];
 }
 
