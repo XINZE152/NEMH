@@ -52,7 +52,9 @@ window.onload = function () {
 </html>`;
 
 app.use(cors({ origin: true }));
-app.use(express.json());
+/** 磅单等字段可能为 data URL（前端允许 ≤4MB 图片，base64 后更大），须高于默认 ~100kb */
+const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '12mb';
+app.use(express.json({ limit: jsonBodyLimit }));
 app.use(httpAccessLogMiddleware());
 
 let db;
@@ -141,6 +143,20 @@ async function main() {
           error: '请求 JSON 格式无效',
           code: 'INVALID_JSON',
           detail: err.message,
+        });
+      }
+    }
+    const tooLarge =
+      err?.type === 'entity.too.large' ||
+      err?.status === 413 ||
+      err?.statusCode === 413 ||
+      /entity too large|payload too large/i.test(String(err?.message || ''));
+    if (tooLarge) {
+      log.warn(`HTTP 413 请求体过大 ${req.method} ${req.originalUrl}: ${err?.message || err}`);
+      if (!res.headersSent) {
+        return res.status(413).json({
+          error: `请求体超过服务器限制（当前 JSON 上限为 ${jsonBodyLimit}），请缩小图片或使用图片地址 URL`,
+          code: 'PAYLOAD_TOO_LARGE',
         });
       }
     }
