@@ -49,6 +49,60 @@ function isWarehouseApiRole() {
     return getApiUserRole() === 'warehouse';
 }
 
+/** 当前登录用户是否为系统管理员（全权限，含离线演示 roleId=1） */
+function isSystemAdministrator() {
+    if (!AppState.currentRole) return false;
+    return AppState.currentRole.permissions.includes('all');
+}
+
+function closeUserInfoMenu() {
+    const wrap = document.getElementById('header-user-info');
+    const menu = document.getElementById('user-info-menu');
+    const trigger = document.getElementById('user-info-trigger');
+    if (!wrap || !menu || !trigger) return;
+    wrap.classList.remove('open');
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleUserInfoMenu() {
+    const wrap = document.getElementById('header-user-info');
+    const menu = document.getElementById('user-info-menu');
+    const trigger = document.getElementById('user-info-trigger');
+    if (!wrap || !menu || !trigger) return;
+    const open = wrap.classList.toggle('open');
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function updateHeaderUserInfo() {
+    const wrap = document.getElementById('header-user-info');
+    const trigger = document.getElementById('user-info-trigger');
+    const menu = document.getElementById('user-info-menu');
+    const adminLink = document.getElementById('user-menu-admin-link');
+    if (!wrap || !trigger) return;
+
+    const nameEl = document.getElementById('current-user');
+    const roleEl = document.getElementById('user-role');
+    if (AppState.currentUser && nameEl) {
+        nameEl.textContent = AppState.currentUser.name;
+    }
+    if (AppState.currentRole && roleEl) {
+        roleEl.textContent = AppState.currentRole.name;
+    }
+
+    closeUserInfoMenu();
+
+    const isAdmin = isSystemAdministrator();
+    trigger.setAttribute('aria-haspopup', 'menu');
+    if (menu) {
+        menu.hidden = true;
+    }
+    if (adminLink) {
+        adminLink.hidden = !isAdmin;
+    }
+}
+
 /** API 模式下：库房角色，或内置 admin（与后端超级管理员一致，可操作收货定价等） */
 function isWarehouseApiRoleOrSuperAdmin() {
     if (!useApiMode()) return true;
@@ -81,8 +135,8 @@ function loadDemoData() {
     if (useApiMode()) {
         AppState.roles = [
             { id: 1, name: '系统管理员', permissions: ['all'] },
-            { id: 2, name: '统计部人员', permissions: ['review', 'quotation', 'report'] },
-            { id: 3, name: '库房管理员', permissions: ['pricing', 'inbound', 'outbound'] },
+            { id: 2, name: '统计部人员', permissions: ['quotation', 'report'] },
+            { id: 3, name: '财务', permissions: ['pricing', 'inbound', 'outbound'] },
         ];
         AppState.users = [];
         return;
@@ -101,16 +155,16 @@ function createDemoData() {
     // 角色数据
     AppState.roles = [
         { id: 1, name: '系统管理员', permissions: ['all'] },
-        { id: 2, name: '统计部人员', permissions: ['review', 'quotation', 'report'] },
-        { id: 3, name: '库房管理员', permissions: ['pricing', 'inbound', 'outbound'] }
+        { id: 2, name: '统计部人员', permissions: ['quotation', 'report'] },
+        { id: 3, name: '财务', permissions: ['pricing', 'inbound', 'outbound'] }
     ];
 
     // 用户数据
     AppState.users = [
         { id: 1, username: 'admin', password: 'admin123', name: '系统管理员', roleId: 1, warehouseId: null },
         { id: 2, username: 'statistics', password: 'stat123', name: '统计部人员', roleId: 2, warehouseId: null },
-        { id: 3, username: 'warehouse1', password: 'ware123', name: '库房管理员A', roleId: 3, warehouseId: 1 },
-        { id: 4, username: 'warehouse2', password: 'ware123', name: '库房管理员B', roleId: 3, warehouseId: 2 }
+        { id: 3, username: 'warehouse1', password: 'ware123', name: '财务部管理员A', roleId: 3, warehouseId: 1 },
+        { id: 4, username: 'warehouse2', password: 'ware123', name: '财务部管理员B', roleId: 3, warehouseId: 2 }
     ];
 
     // 品种数据（仅新能源、电瓶两类）
@@ -258,7 +312,7 @@ function createDemoData() {
             actualWeight: 0,
             price: 310000,
             status: 'pre_outbound',
-            date: '2023-10-27',
+            date: '2023-10-27 11:00:05',
             warehouseId: 1
         }
     ];
@@ -510,8 +564,38 @@ function setupEventListeners() {
         });
     });
     
-    // 退出按钮
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeUserInfoMenu();
+            handleLogout();
+        });
+    }
+
+    initUsersManagementEvents();
+
+    const userInfoTrigger = document.getElementById('user-info-trigger');
+    if (userInfoTrigger) {
+        userInfoTrigger.addEventListener('click', function (e) {
+            e.stopPropagation();
+            toggleUserInfoMenu();
+        });
+    }
+    const userInfoMenu = document.getElementById('user-info-menu');
+    if (userInfoMenu) {
+        userInfoMenu.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+    }
+    document.addEventListener('click', function () {
+        closeUserInfoMenu();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeUserInfoMenu();
+        }
+    });
     
     // 导航菜单
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -565,15 +649,7 @@ function setupEventListeners() {
         pickMaterialQuotationConfirm.addEventListener('click', confirmPickMaterialForQuotation);
     }
     
-    // 入库审核标签页
-    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tab = this.dataset.tab;
-            switchTab(tab);
-        });
-    });
-    
-    // 出库管理标签页
+    // 标签页切换（出库、库存等）
     document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
         btn.addEventListener('click', function() {
             const tab = this.dataset.tab;
@@ -691,6 +767,7 @@ async function handleLogin() {
 
 // 处理退出
 function handleLogout() {
+    closeUserInfoMenu();
     AppState.currentUser = null;
     AppState.currentRole = null;
     
@@ -720,9 +797,7 @@ function showAppPage() {
     document.getElementById('login-page').classList.remove('active');
     document.getElementById('app-page').classList.add('active');
     
-    // 更新用户信息
-    document.getElementById('current-user').textContent = AppState.currentUser.name;
-    document.getElementById('user-role').textContent = AppState.currentRole.name;
+    updateHeaderUserInfo();
     
     // 根据权限显示/隐藏菜单项
     updateMenuVisibility();
@@ -743,8 +818,7 @@ function updateMenuVisibility() {
         if (!hasPermission) {
             switch(page) {
                 case 'pricing':
-                    hasPermission =
-                        permissions.includes('pricing') || permissions.includes('review');
+                    hasPermission = permissions.includes('pricing');
                     break;
                 case 'inbound':
                 case 'outbound':
@@ -753,10 +827,8 @@ function updateMenuVisibility() {
                                    permissions.includes('inbound') ||
                                    permissions.includes('outbound');
                     break;
-                case 'review':
                 case 'quotation':
-                    hasPermission = permissions.includes('review') || 
-                                   permissions.includes('quotation');
+                    hasPermission = permissions.includes('quotation');
                     break;
                 case 'inventory':
                 case 'reports':
@@ -764,6 +836,9 @@ function updateMenuVisibility() {
                     break;
                 case 'dashboard':
                     hasPermission = true;
+                    break;
+                case 'users':
+                    hasPermission = allPermissions;
                     break;
             }
         }
@@ -774,6 +849,12 @@ function updateMenuVisibility() {
 
 // 切换页面
 function switchPage(page) {
+    if (page === 'review') {
+        page = 'dashboard';
+    }
+    if (page === 'users' && !isSystemAdministrator()) {
+        page = 'dashboard';
+    }
     AppState.currentPage = page;
     
     // 更新导航激活状态
@@ -812,9 +893,6 @@ function loadPageContent(page) {
         case 'warehouse':
             loadWarehousePage();
             break;
-        case 'review':
-            loadReviewPage();
-            break;
         case 'quotation':
             loadQuotationPage();
             break;
@@ -827,6 +905,209 @@ function loadPageContent(page) {
         case 'reports':
             loadReportsPage();
             break;
+        case 'users':
+            loadUsersPage();
+            break;
+    }
+}
+
+let systemUsersCache = [];
+let systemUserEditingId = null;
+
+function formatSystemUserRole(role) {
+    if (role === 'statistics') return '系统管理员';
+    if (role === 'warehouse') return '财务部';
+    return role || '-';
+}
+
+function loadUsersPage() {
+    const list = document.getElementById('users-list');
+    const addBtn = document.getElementById('add-user-btn');
+    if (!list) return;
+
+    if (!useApiMode()) {
+        if (addBtn) addBtn.disabled = true;
+        list.innerHTML =
+            '<tr><td colspan="5" style="text-align:center;color:#95a5a6;">请使用后端 API 模式登录后管理用户</td></tr>';
+        return;
+    }
+    if (addBtn) addBtn.disabled = false;
+    list.innerHTML =
+        '<tr><td colspan="5" style="text-align:center;color:#95a5a6;">加载中…</td></tr>';
+    void loadSystemUsersList();
+}
+
+async function loadSystemUsersList() {
+    const tbody = document.getElementById('users-list');
+    if (!tbody || !window.InventoryApi) return;
+    try {
+        const list = await window.InventoryApi.listUsers();
+        systemUsersCache = Array.isArray(list) ? list : [];
+        if (systemUsersCache.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="5" style="text-align:center;color:#95a5a6;">暂无用户</td></tr>';
+            return;
+        }
+        tbody.innerHTML = systemUsersCache
+            .map((u) => {
+                const canDelete = systemUsersCache.length > 1;
+                return `<tr>
+                    <td>${u.id}</td>
+                    <td>${escapeHtml(u.username)}</td>
+                    <td>${escapeHtml(formatSystemUserRole(u.role))}</td>
+                    <td>${escapeHtml(u.created_at || '-')}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-icon" onclick="editUser(${u.id})" title="编辑">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-icon btn-danger" onclick="deleteUser(${u.id})" title="删除" ${canDelete ? '' : 'disabled'}>
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            })
+            .join('');
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#c0392b;">${escapeHtml(e.message || '加载失败')}</td></tr>`;
+    }
+}
+
+function showAddUserModal() {
+    openSystemUserForm(null);
+}
+
+function editUser(id) {
+    const row = systemUsersCache.find((x) => x.id === id);
+    if (row) openSystemUserForm(row);
+}
+
+function deleteUser(id) {
+    void deleteSystemUser(id);
+}
+
+function openSystemUserForm(record) {
+    systemUserEditingId = record ? record.id : null;
+    const titleEl = document.getElementById('system-user-form-title');
+    const pwdLabel = document.getElementById('system-user-password-label');
+    const pwdInput = document.getElementById('system-user-password');
+    const usernameInput = document.getElementById('system-user-username');
+    const roleSelect = document.getElementById('system-user-role');
+    if (!titleEl || !pwdLabel || !pwdInput || !usernameInput || !roleSelect) return;
+
+    if (record) {
+        titleEl.innerHTML = '<i class="fas fa-user-edit"></i> 编辑用户';
+        pwdLabel.textContent = '新密码（留空则不修改）';
+        pwdInput.placeholder = '不修改请留空';
+        pwdInput.value = '';
+        usernameInput.value = record.username || '';
+        roleSelect.value = record.role === 'statistics' ? 'statistics' : 'warehouse';
+    } else {
+        titleEl.innerHTML = '<i class="fas fa-user-plus"></i> 新建用户';
+        pwdLabel.textContent = '密码';
+        pwdInput.placeholder = '至少 4 位';
+        pwdInput.value = '';
+        usernameInput.value = '';
+        roleSelect.value = 'warehouse';
+    }
+
+    const modal = document.getElementById('system-user-form-modal');
+    if (modal) openModal(modal);
+}
+
+async function submitSystemUserForm() {
+    if (!useApiMode() || !window.InventoryApi) {
+        showMessage('请使用 API 模式', 'error');
+        return;
+    }
+    const username = (document.getElementById('system-user-username')?.value || '').trim();
+    const password = document.getElementById('system-user-password')?.value || '';
+    const role = document.getElementById('system-user-role')?.value || 'warehouse';
+
+    if (!username) {
+        showMessage('请输入用户名', 'error');
+        return;
+    }
+
+    try {
+        if (systemUserEditingId) {
+            const body = { username, role };
+            if (password.trim()) {
+                if (password.length < 4) {
+                    showMessage('密码至少 4 位', 'error');
+                    return;
+                }
+                body.password = password;
+            }
+            await window.InventoryApi.updateUser(systemUserEditingId, body);
+            showMessage('用户已更新', 'success');
+        } else {
+            if (!password || password.length < 4) {
+                showMessage('密码至少 4 位', 'error');
+                return;
+            }
+            await window.InventoryApi.createUser({ username, password, role });
+            showMessage('用户已创建', 'success');
+        }
+        closeModal('system-user-form-modal');
+        loadUsersPage();
+    } catch (e) {
+        showMessage(e.message || '保存失败', 'error');
+    }
+}
+
+async function deleteSystemUser(id) {
+    if (!useApiMode() || !window.InventoryApi) return;
+    const row = systemUsersCache.find((x) => x.id === id);
+    if (!row) return;
+    if (systemUsersCache.length <= 1) {
+        showMessage('至少保留一个用户', 'error');
+        return;
+    }
+    const currentApiUser = (() => {
+        try {
+            const raw = localStorage.getItem('apiUser');
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    })();
+    const msg =
+        currentApiUser && currentApiUser.id === id
+            ? '将删除当前登录用户，删除后需重新登录，确定？'
+            : `确定删除用户「${row.username}」？`;
+    if (!confirm(msg)) return;
+
+    try {
+        await window.InventoryApi.deleteUser(id);
+        showMessage('用户已删除', 'success');
+        if (currentApiUser && currentApiUser.id === id) {
+            handleLogout();
+            return;
+        }
+        loadUsersPage();
+    } catch (e) {
+        showMessage(e.message || '删除失败', 'error');
+    }
+}
+
+function initUsersManagementEvents() {
+    const addBtn = document.getElementById('add-user-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', showAddUserModal);
+    }
+
+    const adminLink = document.getElementById('user-menu-admin-link');
+    if (adminLink) {
+        adminLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeUserInfoMenu();
+            switchPage('users');
+        });
+    }
+
+    const saveBtn = document.getElementById('system-user-form-save');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => void submitSystemUserForm());
     }
 }
 
@@ -857,11 +1138,6 @@ function switchTab(tab) {
     
     // 加载标签页内容
     switch(tab) {
-        case 'pending':
-        case 'approved':
-        case 'rejected':
-            loadReviewTab(tab);
-            break;
         case 'pre-outbound':
         case 'actual-outbound':
         case 'outbound-history':
@@ -979,7 +1255,13 @@ function formatDateTime(dateObj) {
     const day = String(dateObj.getDate()).padStart(2, '0');
     const hours = String(dateObj.getHours()).padStart(2, '0');
     const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
+    const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/** 出库管理列表/详情时间展示（精确到秒） */
+function formatOutboundTimeDisplay(value) {
+    return formatQuotationPublishDisplay(value);
 }
 
 function parseDateTime(dateTimeStr) {
@@ -1348,7 +1630,7 @@ function viewPricingImages(id) {
         : '<div class="no-image">暂无收货价格凭证</div>';
 
     const modal = document.getElementById('view-images-modal');
-    if (modal) modal.style.display = 'block';
+    if (modal) openModal(modal);
 }
 
 function viewInboundImage(id) {
@@ -1371,7 +1653,7 @@ function viewInboundImage(id) {
     }
 
     const modal = document.getElementById('view-image-modal');
-    if (modal) modal.style.display = 'block';
+    if (modal) openModal(modal);
 }
 
 // 加载收货定价页面
@@ -1476,7 +1758,7 @@ function showAddPricingModal() {
         saveBtn.textContent = '保存';
     }
 
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 // 保存定价记录
@@ -1587,7 +1869,7 @@ function editPricing(id) {
     if (si) si.value = '';
 
     const modal = document.getElementById('add-pricing-modal');
-    modal.style.display = 'block';
+    openModal(modal);
 
     const saveBtn = modal.querySelector('.modal-footer .btn-primary');
     if (saveBtn) {
@@ -1847,7 +2129,7 @@ function syncInboundUnitPriceFromLatest(materialId) {
             const latest = data.latest.unitPrice;
             const fixed = Number(Number(latest).toFixed(2));
             if (hintEl) {
-                hintEl.style.color = '#2e7d32';
+                hintEl.style.color = '#1565C0';
                 hintEl.textContent =
                     '规则：入库单价须与最新收货定价一致（' + fixed + ' 元/吨），已自动填入，可核对后保存。';
             }
@@ -1922,7 +2204,7 @@ function showAddInboundModal() {
     }
 
     // 显示模态框
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 // 计算入库总价
@@ -2081,7 +2363,7 @@ function viewInbound(id) {
     }
 
     // 显示模态框
-    document.getElementById('view-inbound-modal').style.display = 'block';
+    openModal('view-inbound-modal');
 }
 
 // 编辑入库单
@@ -2128,7 +2410,7 @@ function editInbound(id) {
     
     // 显示模态框
     const modal = document.getElementById('add-inbound-modal');
-    modal.style.display = 'block';
+    openModal(modal);
     
     // 修改保存按钮行为
     const saveBtn = modal.querySelector('.modal-footer .btn-primary');
@@ -2347,7 +2629,7 @@ function showAddWarehouseModal() {
     if (title) title.innerHTML = '<i class="fas fa-warehouse"></i> 新建库房';
     const saveBtn = modal.querySelector('.modal-footer .btn-primary');
     if (saveBtn) saveBtn.textContent = '保存';
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 function editWarehouse(id) {
@@ -2366,7 +2648,7 @@ function editWarehouse(id) {
     if (title) title.innerHTML = '<i class="fas fa-warehouse"></i> 编辑库房';
     const saveBtn = modal.querySelector('.modal-footer .btn-primary');
     if (saveBtn) saveBtn.textContent = '保存修改';
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 function submitWarehouseForm() {
@@ -2491,6 +2773,15 @@ function deleteWarehouse(id) {
     addAction('warehouse', `删除库房 ${w.code} - ${w.name}`);
 }
 
+// 打开模态框（居中、无灰底遮罩）
+function openModal(modalIdOrEl) {
+    const modal =
+        typeof modalIdOrEl === 'string'
+            ? document.getElementById(modalIdOrEl)
+            : modalIdOrEl;
+    if (modal) modal.style.display = 'flex';
+}
+
 // 关闭模态框
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
@@ -2526,213 +2817,6 @@ function closeModal(modalId) {
         const saveBtnWh = modal.querySelector('.modal-footer .btn-primary');
         if (saveBtnWh) saveBtnWh.textContent = '保存';
     }
-}
-
-// 加载入库审核页面
-function loadReviewPage() {
-    // 默认显示待审核标签页
-    switchTab('pending');
-}
-
-// 加载审核标签页内容（表头与 index.html 各表 thead 一致）
-function loadReviewTab(tab) {
-    const listIdMap = {
-        pending: 'pending-review-list',
-        approved: 'approved-list',
-        rejected: 'rejected-list'
-    };
-    const listElement = document.getElementById(listIdMap[tab]);
-    if (!listElement) return;
-
-    listElement.innerHTML = '';
-
-    let filteredOrders = [];
-    switch (tab) {
-        case 'pending':
-            filteredOrders = AppState.inboundOrders.filter((order) => order.status === 'pending');
-            break;
-        case 'approved':
-            filteredOrders = AppState.inboundOrders.filter(
-                (order) => order.status === 'approved' || order.status === 'outbounding'
-            );
-            break;
-        case 'rejected':
-            filteredOrders = AppState.inboundOrders.filter((order) => order.status === 'rejected');
-            break;
-    }
-
-    filteredOrders.forEach((order) => {
-        const material = AppState.materials.find((m) => m.id === order.materialId);
-        const warehouse = AppState.warehouses.find((w) => w.id === order.warehouseId);
-        if (!material || !warehouse) return;
-
-        const row = document.createElement('tr');
-        const whLabel = `${warehouse.code} - ${warehouse.name}`;
-        const matLabel = `${material.code} - ${material.name}`;
-        const timeIn = formatQuotationPublishDisplay(order.date);
-
-        if (tab === 'pending') {
-            row.innerHTML = `
-                <td>${order.orderNo}</td>
-                <td>${whLabel}</td>
-                <td>${matLabel}</td>
-                <td>${order.weight} ${material.unit}</td>
-                <td>${formatCurrency(order.unitPrice)}/${material.unit}</td>
-                <td>${formatCurrency(order.totalPrice)}</td>
-                <td>${timeIn}</td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-success" onclick="reviewInbound(${order.id}, 'approve')">
-                        <i class="fas fa-check"></i> 通过
-                    </button>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="reviewInbound(${order.id}, 'reject')">
-                        <i class="fas fa-times"></i> 驳回
-                    </button>
-                    <button type="button" class="btn btn-sm btn-info" onclick="viewInbound(${order.id})">
-                        <i class="fas fa-eye"></i> 查看
-                    </button>
-                </td>
-            `;
-        } else if (tab === 'approved') {
-            const reviewer = order.reviewerId ? AppState.users.find((u) => u.id === order.reviewerId) : null;
-            const reviewerDisplay =
-                reviewer != null ? reviewer.name : order.reviewerUsername ? order.reviewerUsername : '-';
-            let statusBadge = '';
-            switch (order.status) {
-                case 'approved':
-                    statusBadge = '<span class="badge badge-success">已审核</span>';
-                    break;
-                case 'outbounding':
-                    statusBadge = '<span class="badge badge-info">出库中</span>';
-                    break;
-                default:
-                    statusBadge = `<span class="badge badge-secondary">${order.status || '-'}</span>`;
-            }
-            row.innerHTML = `
-                <td>${order.orderNo}</td>
-                <td>${whLabel}</td>
-                <td>${matLabel}</td>
-                <td>${order.weight} ${material.unit}</td>
-                <td>${formatCurrency(order.unitPrice)}/${material.unit}</td>
-                <td>${formatCurrency(order.totalPrice)}</td>
-                <td>${timeIn}</td>
-                <td>${statusBadge}</td>
-                <td>${escapeHtml(reviewerDisplay)}</td>
-                <td>${order.reviewDate ? escapeHtml(order.reviewDate) : '-'}</td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-info" onclick="viewInbound(${order.id})">
-                        <i class="fas fa-eye"></i> 查看
-                    </button>
-                </td>
-            `;
-        } else if (tab === 'rejected') {
-            const reviewer = order.reviewerId ? AppState.users.find((u) => u.id === order.reviewerId) : null;
-            const reviewerDisplayRejected =
-                reviewer != null ? reviewer.name : order.reviewerUsername ? order.reviewerUsername : '-';
-            const rejectReason = order.rejectReason != null && String(order.rejectReason).trim() !== ''
-                ? order.rejectReason
-                : '—';
-            const rejectTime =
-                order.rejectAt != null && String(order.rejectAt).trim() !== ''
-                    ? formatQuotationPublishDisplay(order.rejectAt)
-                    : order.reviewDate || '—';
-            row.innerHTML = `
-                <td>${order.orderNo}</td>
-                <td>${whLabel}</td>
-                <td>${matLabel}</td>
-                <td>${order.weight} ${material.unit}</td>
-                <td>${formatCurrency(order.unitPrice)}/${material.unit}</td>
-                <td>${formatCurrency(order.totalPrice)}</td>
-                <td>${timeIn}</td>
-                <td>${escapeHtml(rejectReason)}</td>
-                <td>${escapeHtml(String(rejectTime))}</td>
-                <td>${escapeHtml(reviewerDisplayRejected)}</td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-info" onclick="viewInbound(${order.id})">
-                        <i class="fas fa-eye"></i> 查看
-                    </button>
-                </td>
-            `;
-        }
-
-        listElement.appendChild(row);
-    });
-}
-
-// 审核入库单
-function reviewInbound(id, action) {
-    const orderIndex = AppState.inboundOrders.findIndex(o => o.id === id);
-    if (orderIndex === -1) return;
-    
-    const order = AppState.inboundOrders[orderIndex];
-    const material = AppState.materials.find(m => m.id === order.materialId);
-
-    if (useApiMode()) {
-        void (async function () {
-            try {
-                if (action === 'approve') {
-                    await window.InventoryApi.approveInbound(id);
-                    showMessage(`已审核通过入库单 ${order.orderNo}`, 'success');
-                } else if (action === 'reject') {
-                    const inputReason = window.prompt('请输入驳回原因（可留空）；取消则不驳回：', '');
-                    if (inputReason === null) {
-                        showMessage('已取消驳回', 'info');
-                        return;
-                    }
-                    await window.InventoryApi.rejectInbound(id, String(inputReason).trim());
-                    showMessage(`已驳回入库单 ${order.orderNo}`, 'warning');
-                }
-                await window.InventoryApi.refreshAppStateFromServer(AppState);
-                loadReviewTab('pending');
-                loadReviewTab('approved');
-                loadReviewTab('rejected');
-                loadInboundPage();
-                updateDashboardStats();
-            } catch (e) {
-                showMessage(e.message || '操作失败', 'error');
-            }
-        })();
-        return;
-    }
-    
-    if (action === 'approve') {
-        AppState.inboundOrders[orderIndex] = {
-            ...order,
-            status: 'approved',
-            reviewerId: AppState.currentUser.id,
-            reviewDate: new Date().toISOString().split('T')[0]
-        };
-        
-        showMessage(`已审核通过入库单 ${order.orderNo}`, 'success');
-        addAction('review', `审核通过入库单 ${order.orderNo} - ${material?.name}`);
-    } else if (action === 'reject') {
-        const inputReason = window.prompt('请输入驳回原因（可留空，将记为「未填写」）；取消则不驳回：', '');
-        if (inputReason === null) {
-            showMessage('已取消驳回', 'info');
-            return;
-        }
-        const rejectReason = String(inputReason).trim() !== '' ? String(inputReason).trim() : '未填写';
-        AppState.inboundOrders[orderIndex] = {
-            ...order,
-            status: 'rejected',
-            reviewerId: AppState.currentUser.id,
-            reviewDate: new Date().toISOString().split('T')[0],
-            rejectReason,
-            rejectAt: formatDateTime(new Date())
-        };
-
-        showMessage(`已驳回入库单 ${order.orderNo}`, 'warning');
-        addAction('review', `驳回入库单 ${order.orderNo} - ${material?.name}`);
-    }
-    
-    saveToLocalStorage();
-    
-    // 重新加载页面
-    loadReviewTab('pending');
-    loadReviewTab('approved');
-    loadReviewTab('rejected');
-    
-    // 更新仪表板
-    updateDashboardStats();
 }
 
 // 加载对外报价页面
@@ -2825,7 +2909,7 @@ function openPickMaterialForQuotationModal() {
     mats.forEach((m) => {
         sel.appendChild(new Option(`${m.code} - ${m.name}`, String(m.id)));
     });
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 function confirmPickMaterialForQuotation() {
@@ -2905,7 +2989,7 @@ function showSetQuotationModal(materialId) {
     
     // 显示模态框
     const modal = document.getElementById('set-quotation-modal');
-    modal.style.display = 'block';
+    openModal(modal);
     
     // 设置保存按钮行为
     const saveBtn = modal.querySelector('.modal-footer .btn-primary');
@@ -3010,7 +3094,7 @@ function showQuotationHistory(materialId) {
     });
     
     // 显示模态框
-    document.getElementById('quotation-history-modal').style.display = 'block';
+    openModal('quotation-history-modal');
 }
 
 // 加载出库管理页面
@@ -3097,7 +3181,7 @@ function loadOutboundTab(tab) {
                 <td>${order.preWeight} ${material.unit}</td>
                 <td>${formatCurrency(order.price)}/${material.unit}</td>
                 <td><span class="badge ${stClass}">${stLabel}</span></td>
-                <td>${order.date}</td>
+                <td>${formatOutboundTimeDisplay(order.date)}</td>
                 <td>
                     <button class="btn btn-sm btn-success" onclick="executeOutbound(${order.id})">
                         <i class="fas fa-play"></i> 执行出库
@@ -3148,7 +3232,7 @@ function loadOutboundTab(tab) {
                 <td>${formatCurrency(order.price)}/${material.unit}</td>
                 <td>${formatCurrency(avgUnitCost)}/${material.unit}</td>
                 <td>${formatCurrency(profit)}</td>
-                <td>${order.date}</td>
+                <td>${formatOutboundTimeDisplay(order.date)}</td>
             `;
         }
         
@@ -3200,7 +3284,7 @@ function triggerWeighingSlipUpload(outboundOrderId) {
     if (w) w.value = '';
     if (f) f.value = '';
     const modal = document.getElementById('weighing-slip-upload-modal');
-    if (modal) modal.style.display = 'block';
+    if (modal) openModal(modal);
 }
 
 /**
@@ -3229,6 +3313,7 @@ function finalizeActualOutboundWithWeighingSlip(outboundId, actualWeight, newSli
 
     AppState.outboundOrders[orderIndex].actualWeight = aw;
     AppState.outboundOrders[orderIndex].status = 'completed';
+    AppState.outboundOrders[orderIndex].date = formatOutboundTimeDisplay(new Date());
 
     let remainingWeight = aw;
     const suborders = AppState.outboundSuborders.filter((s) => s.outboundOrderId === outboundId);
@@ -3370,7 +3455,7 @@ function viewWeighingSlip(outboundOrderId) {
     if (nameEl) {
         nameEl.textContent = `出库单：${order.orderNo}　文件：${order.weighingSlipName || '未命名'}`;
     }
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 // 预出库弹窗：按品种刷新对外报价下拉（发布时间新→旧，默认第一条为最新）
@@ -3456,7 +3541,7 @@ function showAddOutboundModal() {
     refreshOutboundQuotationSelect();
     
     // 显示模态框
-    modal.style.display = 'block';
+    openModal(modal);
 }
 
 // 保存出库计划
@@ -3523,7 +3608,7 @@ function saveOutbound() {
         actualWeight: 0,
         price: salePrice,
         status: 'pre_outbound',
-        date: date
+        date: formatOutboundTimeDisplay(new Date())
     };
     
     AppState.outboundOrders.push(newOutbound);
@@ -3631,7 +3716,7 @@ function viewOutboundDetails(id) {
     document.getElementById('outbound-detail-actual-weight').textContent = `${order.actualWeight} ${material?.unit || '吨'}`;
     document.getElementById('outbound-detail-price').textContent = formatCurrency(order.price);
     document.getElementById('outbound-detail-total-price').textContent = formatCurrency(order.actualWeight * order.price);
-    document.getElementById('outbound-detail-date').textContent = order.date;
+    document.getElementById('outbound-detail-date').textContent = formatOutboundTimeDisplay(order.date);
     
     let statusText = '';
     switch(order.status) {
@@ -3671,7 +3756,7 @@ function viewOutboundDetails(id) {
     });
     
     // 显示模态框
-    document.getElementById('outbound-detail-modal').style.display = 'block';
+    openModal('outbound-detail-modal');
 }
 
 // 执行出库（从预出库转为实际出库）
@@ -3969,7 +4054,7 @@ function viewInventoryDetails(materialId, warehouseId) {
     });
     
     // 显示模态框
-    document.getElementById('inventory-detail-modal').style.display = 'block';
+    openModal('inventory-detail-modal');
 }
 
 function fillInventoryReportFilters() {
@@ -4163,7 +4248,7 @@ function viewMaterialInventory(materialId) {
     });
     
     // 显示模态框
-    document.getElementById('material-distribution-modal').style.display = 'block';
+    openModal('material-distribution-modal');
 }
 
 function fillProfitReportFilters() {
