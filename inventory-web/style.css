@@ -346,6 +346,11 @@ body {
     display: none !important;
 }
 
+/* 展开下拉时隐藏按钮内角色徽章，避免与菜单项混淆 */
+.user-info--dropdown.open .role-badge {
+    visibility: hidden;
+}
+
 .user-info-menu-item {
     display: flex;
     align-items: center;
