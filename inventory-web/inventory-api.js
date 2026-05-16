@@ -121,11 +121,11 @@
     }
 
     const role = isWarehouse
-      ? { id: 3, name: '库房', permissions: ['pricing', 'inbound', 'outbound'] }
+      ? { id: 3, name: '财务', permissions: ['pricing', 'inbound', 'outbound'] }
       : {
           id: 2,
           name: '统计部',
-          permissions: ['review', 'quotation', 'report'],
+          permissions: ['quotation', 'report'],
         };
     const user = {
       id: apiUser.id,
@@ -202,7 +202,8 @@
     const da = String(d.getDate()).padStart(2, '0');
     const h = String(d.getHours()).padStart(2, '0');
     const mi = String(d.getMinutes()).padStart(2, '0');
-    return y + '-' + mo + '-' + da + ' ' + h + ':' + mi;
+    const s = String(d.getSeconds()).padStart(2, '0');
+    return y + '-' + mo + '-' + da + ' ' + h + ':' + mi + ':' + s;
   }
 
   function normalizeInbound(io) {
@@ -239,6 +240,11 @@
 
   function normalizeOutboundHeader(o) {
     const pending = o.status === 'pending';
+    const rawCreated = o.createdAt || o.created_at || '';
+    const rawUpdated = o.updatedAt || o.updated_at || '';
+    const displayTime = pending
+      ? formatApiTimeToDisplay(rawCreated)
+      : formatApiTimeToDisplay(rawUpdated || rawCreated);
     return {
       id: o.id,
       orderNo: o.orderNo,
@@ -248,7 +254,9 @@
       actualWeight: Number(o.actualWeight != null ? o.actualWeight : o.actual_weight || 0),
       price: Number(o.unitPrice != null ? o.unitPrice : o.unit_price),
       status: pending ? 'pre_outbound' : 'completed',
-      date: (o.createdAt || o.created_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+      date: displayTime || formatApiTimeToDisplay(new Date().toISOString()),
+      createdAt: rawCreated,
+      updatedAt: rawUpdated,
       weighingSlipImage: o.weighbridgePhoto || o.weighbridge_photo || '',
       weighingSlipName: '磅单',
     };
@@ -448,6 +456,15 @@
     /** GET /api/admin/users（仅 statistics） */
     listUsers: function () {
       return apiFetch('/api/admin/users');
+    },
+    createUser: function (body) {
+      return apiFetch('/api/admin/users', { method: 'POST', body: body || {} });
+    },
+    updateUser: function (id, body) {
+      return apiFetch('/api/admin/users/' + id, { method: 'PUT', body: body || {} });
+    },
+    deleteUser: function (id) {
+      return apiFetch('/api/admin/users/' + id, { method: 'DELETE' });
     },
   };
 })();

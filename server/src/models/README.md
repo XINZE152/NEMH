@@ -15,7 +15,7 @@
 
 ### 2. 角色 (Role)
 - id: 主键
-- name: 角色名称（库房管理员、统计部、系统管理员）
+- name: 角色名称（财务部管理员、统计部、系统管理员）
 - description: 角色描述
 - permissions: 权限列表（JSON数组）
 
