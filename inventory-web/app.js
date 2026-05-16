@@ -78,8 +78,6 @@ function toggleUserInfoMenu() {
 function updateHeaderUserInfo() {
     const wrap = document.getElementById('header-user-info');
     const trigger = document.getElementById('user-info-trigger');
-    const menu = document.getElementById('user-info-menu');
-    const adminLink = document.getElementById('user-menu-admin-link');
     if (!wrap || !trigger) return;
 
     const nameEl = document.getElementById('current-user');
@@ -93,13 +91,10 @@ function updateHeaderUserInfo() {
 
     closeUserInfoMenu();
 
-    const isAdmin = isSystemAdministrator();
     trigger.setAttribute('aria-haspopup', 'menu');
+    const menu = document.getElementById('user-info-menu');
     if (menu) {
         menu.hidden = true;
-    }
-    if (adminLink) {
-        adminLink.hidden = !isAdmin;
     }
 }
 
@@ -1165,15 +1160,6 @@ function initUsersManagementEvents() {
     const addBtn = document.getElementById('add-user-btn');
     if (addBtn) {
         addBtn.addEventListener('click', showAddUserModal);
-    }
-
-    const adminLink = document.getElementById('user-menu-admin-link');
-    if (adminLink) {
-        adminLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            closeUserInfoMenu();
-            switchPage('users');
-        });
     }
 
     const saveBtn = document.getElementById('system-user-form-save');
