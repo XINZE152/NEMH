@@ -379,7 +379,9 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `GET /api/admin/outbound-orders/:id`
 
-含 `fifoLines`（先进先出子行，含 `inboundAt`、`inboundUnitPrice`）；`completedAt` / `outboundTime`（已完成时为 `updatedAt`，含时分秒）；另含 `defaultOutboundUnitPrice`。
+含 `fifoLines`（先进先出子行，含 `inboundAt`、`inboundUnitPrice`、`actualWeight`、`plannedWeight`）；`completedAt` / `outboundTime`（已完成时为 `updatedAt`，含时分秒）；已完成单含 `salesRevenue`（实际重量×出库单价）；另含 `defaultOutboundUnitPrice`。
+
+列表 `GET /api/admin/outbound-orders` 每条同样包含 `completedAt`、`outboundTime`；已完成单含 `salesRevenue`（不含 `fifoLines`，详情接口含完整 `fifoLines`）。
 
 ### `POST /api/admin/outbound-orders`（仅 `warehouse`）
 
@@ -407,17 +409,40 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `GET /api/admin/inbound-summary-alerts`
 
-入库汇总预警（库房 + 品种维度）。
+入库汇总预警（库房 + 品种维度）。出库占用重量从 **`outbound_orders` 实时汇总**（与 FIFO 一致），不读 `warehouse_material_outbound` 缓存表。
 
 **Query：**
 
 | 参数 | 说明 |
 |------|------|
-| `basis` | `actual` 或 `combined`（默认 `combined`，即实际+预出库扣减规则） |
+| `basis` | `actual` 或 `combined`（默认 `combined`） |
 | `thresholdTon` / `threshold_ton` | 正数，默认 `30`（吨） |
 | `onlyThirtyTonReminder` / `only_thirty_ton_reminder` | `1` 或 `true` 时仅返回累计已审核入库 ≥ 阈值的项 |
 
-**响应：** `basis`, `defaultBasis`, `thresholdTon`, `onlyThirtyTonReminder`, `hasInboundTonReminder`, `items`（含 `warehouse`, `material`, 各类重量与 `remainingWeightByBasis` 等）。
+**`basis` 扣减规则：**
+
+| `basis` | 扣减重量 | 可用库存（`remainingWeightByBasis`） |
+|---------|----------|--------------------------------------|
+| `combined` | 已完成 **实际出库** + 待完成 **预出库**（完成出库后预出库回滚，不与实际重复） | 总入库 − 扣减 |
+| `actual` | 仅 **实际出库** | 总入库 − 实际出库 |
+
+**响应：** `basis`, `defaultBasis`, `combinedRuleDescription`, `thresholdTon`, `onlyThirtyTonReminder`, `hasInboundTonReminder`, `items`（含 `deductionWeightByBasis`, `combinedOutboundDeductionWeight`, `remainingWeightByBasis` 等）。
+
+### `GET /api/admin/inventory/available-stock`
+
+查询指定库房 + 品种的可出库库存（**FIFO 行级可用量之和**，与 `POST /api/admin/outbound-orders` 库存校验一致）。
+
+**Query（必填）：** `warehouseId` / `warehouse_id`, `materialId` / `material_id`
+
+**响应：** `availableWeight`, `totalApprovedInboundWeight`, `actualOutboundWeight`, `plannedOutboundWeight`, `combinedOutboundDeductionWeight`, `remainingByCombinedBasis`, `remainingByActualBasis`, `fifoLines`（每行 `inboundOrderId`, `availableWeight` 等）。
+
+### `GET /api/admin/reports/profit-summary`
+
+按品种汇总已完成出库的利润（服务端 FIFO 成本，避免仅前端聚合误差）。
+
+**Query（均可选）：** `startDate` / `start_date`, `endDate` / `end_date`（`YYYY-MM-DD`，按出库单 **`updated_at` 日期**筛选完成时间）, `materialId`, `warehouseId`
+
+**响应：** `completedAtBasis`, `totals`（`salesWeight`, `salesRevenue`, `salesCost`, `salesProfit`, `profitMarginPercent`）, `items`（每品种含 `avgSaleUnitPrice` 加权均价、便于与对外报价对照）。
 
 ### `GET /api/admin/inventory/warehouse-stock-report`
 

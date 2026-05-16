@@ -1332,9 +1332,10 @@
       "get": {
         "tags": ["库存与预警"],
         "summary": "入库汇总预警",
+        "description": "basis=combined 时扣减=实际出库+预出库；占用重量从 outbound_orders 汇总，与 FIFO 一致。",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
-          { "name": "basis", "in": "query", "schema": { "type": "string", "enum": ["actual", "combined"] } },
+          { "name": "basis", "in": "query", "schema": { "type": "string", "enum": ["actual", "combined"], "default": "combined" } },
           { "name": "thresholdTon", "in": "query", "schema": { "type": "number" } },
           { "name": "onlyThirtyTonReminder", "in": "query", "schema": { "type": "string", "enum": ["1", "true"] } }
         ],
@@ -1346,10 +1347,84 @@
                 "example": {
                   "basis": "combined",
                   "defaultBasis": "combined",
+                  "combinedRuleDescription": "扣减重量 = 已完成实际出库重量 + 待完成预出库重量",
                   "thresholdTon": 30,
                   "onlyThirtyTonReminder": false,
                   "hasInboundTonReminder": false,
                   "items": []
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/inventory/available-stock": {
+      "get": {
+        "tags": ["库存与预警"],
+        "summary": "可出库库存（FIFO）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "warehouseId", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "materialId", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "可用量与 FIFO 明细",
+            "content": {
+              "application/json": {
+                "example": {
+                  "availableWeight": 12.5,
+                  "totalApprovedInboundWeight": 50,
+                  "actualOutboundWeight": 10,
+                  "plannedOutboundWeight": 27.5,
+                  "combinedOutboundDeductionWeight": 37.5,
+                  "remainingByCombinedBasis": 12.5,
+                  "fifoLines": []
+                }
+              }
+            }
+          },
+          "400": { "description": "参数无效" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/reports/profit-summary": {
+      "get": {
+        "tags": ["库存与预警"],
+        "summary": "利润汇总报表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "warehouseId", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "按品种汇总",
+            "content": {
+              "application/json": {
+                "example": {
+                  "completedAtBasis": "updated_at",
+                  "totals": {
+                    "salesWeight": 52.5,
+                    "salesRevenue": 15755,
+                    "salesCost": 14000,
+                    "salesProfit": 1755,
+                    "profitMarginPercent": 11.14
+                  },
+                  "items": [
+                    {
+                      "material": { "id": 1, "code": "MAT-001", "name": "示例" },
+                      "salesWeight": 52.5,
+                      "salesRevenue": 15755,
+                      "salesCost": 14000,
+                      "avgSaleUnitPrice": 300.1
+                    }
+                  ]
                 }
               }
             }
