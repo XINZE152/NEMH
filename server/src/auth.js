@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { get } from './db.js';
 import { createLogger, apiError } from './logger.js';
+import { enrichUserWithRoleLabel, getRoleDisplayName } from './roleLabels.js';
 
 const log = createLogger('nemh.auth');
 
@@ -17,7 +18,7 @@ export function normalizeUserRole(role) {
 
 export function logAuthHint() {
   console.log(
-    '[auth] 空库自动创建 admin / admin123（statistics）：内置超级管理员，拥有统计部与库房全部 API 权限。其他 statistics 用户仅统计部接口；库房 role=warehouse：收货定价、入库、出库。自助注册：POST /api/register。JWT_SECRET 可覆盖密钥。'
+    '[auth] 空库自动创建 admin / admin123（statistics）：内置超级管理员，拥有统计部与财务部全部 API 权限。其他 statistics 用户仅统计部接口；role=warehouse（财务部管理员）：收货定价、入库、出库。入库已自动审核。自助注册：POST /api/register。宝驰库房：BAOCHI_WAREHOUSE_API_URL。JWT_SECRET 可覆盖密钥。'
   );
 }
 
@@ -55,9 +56,15 @@ export async function tryLogin(db, username, password) {
   return {
     ok: true,
     token: createAdminToken(row.id, row.username, role),
-    user: { id: row.id, username: row.username, role },
+    user: enrichUserWithRoleLabel({
+      id: row.id,
+      username: row.username,
+      role,
+    }),
   };
 }
+
+export { getRoleDisplayName };
 
 /** 鉴权：校验 Token 并从数据库加载当前用户角色（与 JWT 解耦，改角色后重新请求即可生效）。 */
 export function createAuthMiddleware(db) {
@@ -149,7 +156,7 @@ export function requireWarehouseRole(req, res, next) {
     req,
     res,
     403,
-    { error: '仅库房可操作', code: 'WAREHOUSE_ROLE_REQUIRED' },
+    { error: '仅财务部管理员可操作', code: 'WAREHOUSE_ROLE_REQUIRED' },
     { role: req.admin?.role, username: req.admin?.username }
   );
 }

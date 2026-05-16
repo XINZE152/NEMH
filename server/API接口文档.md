@@ -39,8 +39,10 @@ Authorization: Bearer <token>
 
 | 值 | 说明 |
 |----|------|
-| `statistics` | 统计部：用户管理、入库审核/驳回、发布对外统一报价等 |
-| `warehouse` | 库房：收货定价、入库录入、出库与磅单解析等 |
+| `statistics` | 统计部：用户管理、发布对外统一报价等 |
+| `warehouse` | 财务部管理员（展示名）：收货定价、入库录入、出库与磅单解析等 |
+
+登录成功 `user` 含 `roleDisplayName`（如 `财务部管理员`）。内置 `admin` 账号同时拥有统计部与财务部 API 权限。
 
 JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新读取角色**，改角色后重新请求即可生效。
 
@@ -51,6 +53,9 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 | `JWT_SECRET` | JWT 签名密钥；生产环境务必设置 |
 | `PORT` | 监听端口 |
 | `DISABLE_PUBLIC_REGISTER` | 设为 `1` 时关闭 `POST /api/register` 自助注册（返回 403） |
+| `BAOCHI_WAREHOUSE_API_URL` | 宝驰库房列表 GET 地址；配置后可用同步接口，默认禁止本地库房增删改 |
+| `BAOCHI_WAREHOUSE_API_TOKEN` | 可选，访问宝驰接口的 Bearer Token |
+| `BAOCHI_ALLOW_LOCAL_WAREHOUSE_CRUD` | 设为 `1` 时即使配置了宝驰 URL 也允许本地 POST/PUT/DELETE 库房 |
 
 ### 常见 HTTP 状态
 
@@ -58,7 +63,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 |--------|------|
 | 400 | 参数不合法 |
 | 401 | 未登录、Token 无效/过期、用户不存在 |
-| 403 | 已登录但角色不允许（如「仅统计部可操作」「仅库房可操作」） |
+| 403 | 已登录但角色不允许（如「仅统计部可操作」「仅财务部管理员可操作」） |
 | 404 | 资源不存在 |
 | 409 | 唯一约束冲突（如用户名、单号重复） |
 | 500 | 服务器内部错误 |
@@ -88,7 +93,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 }
 ```
 
-**成功 200：** `{ "token": "...", "user": { "id": 1, "username": "admin", "role": "statistics" } }`
+**成功 200：** `{ "token": "...", "user": { "id": 1, "username": "admin", "role": "statistics", "roleDisplayName": "统计部" } }`
 
 **失败：** 400（缺字段）、401（用户名或密码错误）、500。
 
@@ -96,7 +101,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 自助注册（**无需登录、无需 Token**）。
 
-**行为：** 新建用户 **`role` 固定为 `warehouse`（库房）**；请求体里若带 `role` 会被忽略，**不可**通过本接口注册为统计部。统计部账号仍须由已有统计部用户调用 `POST /api/admin/users` 创建。
+**行为：** 新建用户 **`role` 固定为 `warehouse`（财务部管理员）**；请求体里若带 `role` 会被忽略，**不可**通过本接口注册为统计部。统计部账号仍须由已有统计部用户调用 `POST /api/admin/users` 创建。
 
 **请求体：**
 
@@ -155,11 +160,15 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ## 库房（已登录任意角色）
 
+### `POST /api/admin/warehouses/sync-from-baoche`
+
+从宝驰接口同步库房到本地（需 `BAOCHI_WAREHOUSE_API_URL`）。**成功 200：** `{ ok, synced, total }`。
+
 ### `GET /api/admin/warehouses`
 
-**Query：** `search`（可选）— 按代码、名称、地址模糊匹配（`%` 会被去掉）。
+**Query：** `search`（可选）— 按代码、名称、地址模糊匹配；`sync=1` 时先执行宝驰同步再返回列表。
 
-**响应：** 数组，元素为 `{ id, code, name, address, createdAt, updatedAt }`（camelCase）。
+**响应：** 数组，元素为 `{ id, code, name, address, externalSource, externalId, createdAt, updatedAt }`（camelCase）。
 
 ### `GET /api/admin/warehouses/:id`
 
@@ -310,7 +319,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `POST /api/admin/inbound-orders`（仅 `warehouse`）
 
-创建入库单（待审核）。
+创建入库单（**自动审核通过**，`audit_status` 为 `approved`）。
 
 **规则：** 录入单价必须与该品种**当前最新收货定价**一致（元/吨比较保留两位小数），否则 400 并带 `latestPurchaseUnitPrice`。
 
@@ -330,7 +339,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `PUT /api/admin/inbound-orders/:id`（仅 `warehouse`）
 
-修改入库单。仅 `audit_status === 'pending'` 可操作；若已存在 `outbound_fifo_lines` 关联则不可修改。
+修改入库单。`approved` 且未关联出库 FIFO 时可改；已驳回不可改；若已存在 `outbound_fifo_lines` 关联则不可修改。
 
 **请求体：** 与 `POST` 相同（`materialId`、`weight`、`unitPrice` 必填；`photo` / `inboundPhoto`、`inboundAt`、`warehouseId` 可选）。不传 `photo` / `inboundPhoto` 时保留原照片。
 
@@ -340,17 +349,15 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `PUT /api/admin/inbound-orders/:id/approve`（仅 `statistics`）
 
-待审核 → 已通过（展示语义为「已审核待出库」）。仅 `audit_status === 'pending'` 可操作。
+**兼容接口**：新建入库已自动通过；仅对历史 `pending` 单有效。已为 `approved` 时幂等返回 200。
 
 ### `PUT /api/admin/inbound-orders/:id/reject`（仅 `statistics`）
 
-驳回；若已存在 `outbound_fifo_lines` 关联则不可驳回。
-
-**请求体（可选）：** `rejectReason` / `reject_reason` / `reason`（字符串，最长约 500）。
+**已关闭**：返回 400，`code`: `INBOUND_AUDIT_DISABLED`。
 
 ### `DELETE /api/admin/inbound-orders/:id`（仅 `warehouse`）
 
-物理删除入库单。仅 `audit_status === 'pending'` 可操作；若已存在 `outbound_fifo_lines` 关联则不可删除（与驳回规则一致）。
+物理删除入库单。`approved` 且未关联出库 FIFO 时可删；已驳回不可删。
 
 **成功 204**（无响应体）。
 
@@ -372,15 +379,15 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `GET /api/admin/outbound-orders/:id`
 
-含 `fifoLines`（先进先出子行）；另含 `defaultOutboundUnitPrice`（当日已发布报价优先，否则最新对外报价）。
+含 `fifoLines`（先进先出子行，含 `inboundAt`、`inboundUnitPrice`）；`completedAt` / `outboundTime`（已完成时为 `updatedAt`，含时分秒）；另含 `defaultOutboundUnitPrice`。
 
 ### `POST /api/admin/outbound-orders`（仅 `warehouse`）
 
 创建出库单，`status` 为 `pending`；按 FIFO 自动写 `outbound_fifo_lines`。
 
-**请求体：** `warehouseId`（默认 1）, `materialId`, `plannedWeight`（>0）, `unitPrice`（可选；不传则尝试用当日/最新对外报价）, `orderNo`（可选，不传则生成 `CK-YYYYMMDD-####`）。
+**请求体：** `warehouseId`（默认 1）, `materialId`, `plannedWeight`（>0）, `unitPrice`（可选；不传则尝试用当日/最新对外报价）, `orderNo`（可选，不传则生成 `CK-YYYYMMDD-####`）。**禁止** `materialIds` 多品种或 `materials` 数组长度 > 1（`code`: `MULTIPLE_MATERIALS`）。
 
-**失败 400 示例：** 库存不足（`code`: `FIFO_INSUFFICIENT`），体中可能含 `shortfall`、`availableWeight`、`plannedWeight` 等。服务端 `api.log` 中可检索 `nemh.api` 查看 FIFO 明细（已审核行、待审核数量等）。
+**失败 400 示例：** 库存不足（`code`: `FIFO_INSUFFICIENT`），体中可能含 `shortfall`、`availableWeight`、`plannedWeight` 等。服务端 `api.log` 中可检索 `nemh.api` 查看 FIFO 明细。
 
 ### `PUT /api/admin/outbound-orders/:id/complete`（仅 `warehouse`）
 

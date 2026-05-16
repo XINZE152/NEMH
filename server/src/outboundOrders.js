@@ -120,7 +120,7 @@ function buildFifoAllocations(rows, plannedTotal) {
   if (rem > 0.001) {
     return {
       ok: false,
-      error: '可出库库存不足（先进先出），请减少预出库重量或先完成入库审核',
+      error: '可出库库存不足（先进先出），请减少预出库重量或先完成入库',
       lines: [],
       shortfall: rem,
     };
@@ -174,6 +174,8 @@ async function fetchFifoLines(db, outboundOrderId) {
     `SELECT l.id,
             l.inbound_order_id AS inboundOrderId,
             io.order_no AS inboundOrderNo,
+            io.inbound_at AS inboundAt,
+            io.unit_price AS inboundUnitPrice,
             l.planned_weight AS plannedWeight,
             l.actual_weight AS actualWeight,
             l.line_no AS lineNo,
@@ -186,11 +188,62 @@ async function fetchFifoLines(db, outboundOrderId) {
   );
 }
 
+function mapOutboundRow(row) {
+  if (!row) return null;
+  const completed = row.status === 'completed';
+  const outboundTime = completed ? row.updatedAt : null;
+  return {
+    ...row,
+    /** 业务出库完成时间（与 updatedAt 一致，ISO8601 含时分秒） */
+    completedAt: outboundTime,
+    outboundTime,
+  };
+}
+
 async function fetchOutboundDetail(db, id) {
   const header = await get(db, `${OUTBOUND_HEADER_SQL} WHERE o.id = ?`, [id]);
   if (!header) return null;
   const fifoLines = await fetchFifoLines(db, id);
-  return { ...header, fifoLines };
+  return mapOutboundRow({ ...header, fifoLines });
+}
+
+/** 禁止一次出库请求携带多个品种 */
+function rejectMultipleMaterials(body, res, req) {
+  const rawIds = body.materialIds ?? body.material_ids;
+  if (Array.isArray(rawIds)) {
+    const uniq = [
+      ...new Set(
+        rawIds.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0)
+      ),
+    ];
+    if (uniq.length > 1) {
+      apiError(
+        req,
+        res,
+        400,
+        {
+          error: '一次出库仅允许单一品种，不可多品类同时出库',
+          code: 'MULTIPLE_MATERIALS',
+        },
+        { materialIds: uniq }
+      );
+      return true;
+    }
+  }
+  if (Array.isArray(body.materials) && body.materials.length > 1) {
+    apiError(
+      req,
+      res,
+      400,
+      {
+        error: '一次出库仅允许单一品种，不可多品类同时出库',
+        code: 'MULTIPLE_MATERIALS',
+      },
+      { count: body.materials.length }
+    );
+    return true;
+  }
+  return false;
 }
 
 export function registerOutboundOrderRoutes(app, db, authMiddleware) {
@@ -270,7 +323,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
       );
 
       res.json({
-        orders: rows,
+        orders: rows.map(mapOutboundRow),
         total,
         page,
         pageSize,
@@ -310,6 +363,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
     async (req, res) => {
     try {
       const body = req.body || {};
+      if (rejectMultipleMaterials(body, res, req)) return;
       const warehouseId = Number(body.warehouseId ?? body.warehouse_id ?? 1);
       const materialId = Number(body.materialId ?? body.material_id);
       const plannedWeight = parsePositiveNumber(
@@ -423,12 +477,6 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
         const totalAvailable = roundTon(
           fifoRows.reduce((s, r) => s + Number(r.availableWeight || 0), 0)
         );
-        const pendingRow = await get(
-          db,
-          `SELECT COUNT(*) AS c FROM inbound_orders
-           WHERE warehouse_id = ? AND material_id = ? AND audit_status = 'pending'`,
-          [warehouseId, materialId]
-        );
         const approvedCountRow = await get(
           db,
           `SELECT COUNT(*) AS c FROM inbound_orders
@@ -452,7 +500,6 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
             unitPrice,
             totalFifoAvailable: totalAvailable,
             approvedInboundCount: Number(approvedCountRow?.c ?? 0),
-            pendingInboundCount: Number(pendingRow?.c ?? 0),
             fifoLines: fifoRows.map((r) => ({
               inboundOrderId: r.inboundOrderId,
               inboundOrderNo: r.inboundOrderNo,
