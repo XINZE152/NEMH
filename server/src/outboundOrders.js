@@ -1,7 +1,7 @@
 import { run, all, get } from './db.js';
 import { requireWarehouseRole } from './auth.js';
 import { parseWeighbridgeText } from './weighbridgeParse.js';
-import { createLogger, setApiLogContext } from './logger.js';
+import { createLogger, apiError } from './logger.js';
 
 const log = createLogger('nemh.outboundOrders');
 
@@ -344,44 +344,71 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
       }
 
       if (!Number.isInteger(warehouseId) || warehouseId < 1) {
-        setApiLogContext(res, { warehouseId });
-        return res.status(400).json({ error: '无效库房', code: 'INVALID_WAREHOUSE' });
+        return apiError(
+          req,
+          res,
+          400,
+          { error: '无效库房', code: 'INVALID_WAREHOUSE' },
+          { warehouseId }
+        );
       }
       if (!Number.isInteger(materialId) || materialId < 1) {
-        setApiLogContext(res, { materialId });
-        return res.status(400).json({ error: '请选择出库品种', code: 'INVALID_MATERIAL' });
+        return apiError(
+          req,
+          res,
+          400,
+          { error: '请选择出库品种', code: 'INVALID_MATERIAL' },
+          { materialId }
+        );
       }
       if (plannedWeight === null) {
-        setApiLogContext(res, { warehouseId, materialId, plannedWeight: body.plannedWeight });
-        return res.status(400).json({
-          error: '预出库重量须为大于 0 的数字',
-          code: 'INVALID_PLANNED_WEIGHT',
-        });
+        return apiError(
+          req,
+          res,
+          400,
+          { error: '预出库重量须为大于 0 的数字', code: 'INVALID_PLANNED_WEIGHT' },
+          { warehouseId, materialId, plannedWeight: body.plannedWeight }
+        );
       }
 
       const wh = await get(db, 'SELECT id FROM warehouses WHERE id = ?', [
         warehouseId,
       ]);
       if (!wh) {
-        setApiLogContext(res, { warehouseId });
-        return res.status(400).json({ error: '库房不存在', code: 'WAREHOUSE_NOT_FOUND' });
+        return apiError(
+          req,
+          res,
+          400,
+          { error: '库房不存在', code: 'WAREHOUSE_NOT_FOUND' },
+          { warehouseId }
+        );
       }
       const mat = await get(db, 'SELECT id FROM materials WHERE id = ?', [
         materialId,
       ]);
       if (!mat) {
-        setApiLogContext(res, { materialId });
-        return res.status(400).json({ error: '品种不存在', code: 'MATERIAL_NOT_FOUND' });
+        return apiError(
+          req,
+          res,
+          400,
+          { error: '品种不存在', code: 'MATERIAL_NOT_FOUND' },
+          { materialId }
+        );
       }
 
       const defaultQuote = await getDefaultOutboundUnitPrice(db, materialId);
       if (unitPrice === null) {
         if (defaultQuote === null) {
-          setApiLogContext(res, { warehouseId, materialId, plannedWeight });
-          return res.status(400).json({
-            error: '请填写出库价格，或先维护该品种的对外报价',
-            code: 'MISSING_UNIT_PRICE',
-          });
+          return apiError(
+            req,
+            res,
+            400,
+            {
+              error: '请填写出库价格，或先维护该品种的对外报价',
+              code: 'MISSING_UNIT_PRICE',
+            },
+            { warehouseId, materialId, plannedWeight }
+          );
         }
         unitPrice = defaultQuote;
       }
@@ -408,31 +435,32 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
            WHERE warehouse_id = ? AND material_id = ? AND audit_status = 'approved'`,
           [warehouseId, materialId]
         );
-        setApiLogContext(res, {
-          warehouseId,
-          materialId,
-          plannedWeight,
-          unitPrice,
-          totalFifoAvailable: totalAvailable,
-          shortfall: fifo.shortfall,
-          approvedInboundCount: Number(approvedCountRow?.c ?? 0),
-          pendingInboundCount: Number(pendingRow?.c ?? 0),
-          fifoLines: fifoRows.map((r) => ({
-            inboundOrderId: r.inboundOrderId,
-            inboundOrderNo: r.inboundOrderNo,
-            inboundWeight: r.inboundWeight,
-            availableWeight: roundTon(r.availableWeight),
-          })),
-        });
-        return res.status(400).json({
-          error: fifo.error,
-          code: 'FIFO_INSUFFICIENT',
-          shortfall: fifo.shortfall,
-          availableWeight: totalAvailable,
-          plannedWeight,
-          warehouseId,
-          materialId,
-        });
+        return apiError(
+          req,
+          res,
+          400,
+          {
+            error: fifo.error,
+            code: 'FIFO_INSUFFICIENT',
+            shortfall: fifo.shortfall,
+            availableWeight: totalAvailable,
+            plannedWeight,
+            warehouseId,
+            materialId,
+          },
+          {
+            unitPrice,
+            totalFifoAvailable: totalAvailable,
+            approvedInboundCount: Number(approvedCountRow?.c ?? 0),
+            pendingInboundCount: Number(pendingRow?.c ?? 0),
+            fifoLines: fifoRows.map((r) => ({
+              inboundOrderId: r.inboundOrderId,
+              inboundOrderNo: r.inboundOrderNo,
+              inboundWeight: r.inboundWeight,
+              availableWeight: roundTon(r.availableWeight),
+            })),
+          }
+        );
       }
 
       const result = await run(

@@ -9,6 +9,8 @@ import {
   createLogger,
   httpAccessLogMiddleware,
   clientErrorCaptureMiddleware,
+  requestIdMiddleware,
+  apiError,
   sendServerError,
 } from './logger.js';
 import { registerUserAdminRoutes } from './adminUsers.js';
@@ -60,6 +62,7 @@ app.use(cors({ origin: true }));
 /** 磅单等字段可能为 data URL（前端允许 ≤4MB 图片，base64 后更大），须高于默认 ~100kb */
 const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '12mb';
 app.use(express.json({ limit: jsonBodyLimit }));
+app.use(requestIdMiddleware());
 app.use(clientErrorCaptureMiddleware());
 app.use(httpAccessLogMiddleware());
 
@@ -92,14 +95,21 @@ app.post('/api/admin/login', async (req, res) => {
     !username ||
     !password
   ) {
-    log.warn('登录入参无效: 缺少用户名或密码');
-    return res.status(400).json({ error: '请输入用户名和密码' });
+    return apiError(req, res, 400, {
+      error: '请输入用户名和密码',
+      code: 'MISSING_CREDENTIALS',
+    });
   }
   try {
     const result = await tryLogin(db, username, password);
     if (!result.ok) {
-      log.warn(`登录失败: 用户名或密码错误 (username=${username})`);
-      return res.status(401).json({ error: '用户名或密码错误' });
+      return apiError(
+        req,
+        res,
+        401,
+        { error: '用户名或密码错误', code: 'INVALID_CREDENTIALS' },
+        { username }
+      );
     }
     log.info(
       `管理员登录成功: ${result.user.username} (id=${result.user.id}, role=${result.user.role})`
@@ -128,10 +138,13 @@ async function main() {
   /** 未匹配的 /api/*（须在错误处理中间件之前） */
   app.use((req, res) => {
     if (req.path.startsWith('/api')) {
-      log.warn(`HTTP 404 ${req.method} ${req.originalUrl}（无匹配路由）`);
-      return res
-        .status(404)
-        .json({ error: '接口不存在', code: 'NOT_FOUND', path: req.originalUrl });
+      return apiError(
+        req,
+        res,
+        404,
+        { error: '接口不存在', code: 'NOT_FOUND', path: req.originalUrl },
+        { path: req.originalUrl }
+      );
     }
     res.status(404).type('text').send('Not found');
   });
@@ -143,13 +156,18 @@ async function main() {
       'body' in err &&
       (err.status === 400 || err.statusCode === 400)
     ) {
-      log.warn(`HTTP 400 请求体非合法 JSON ${req.method} ${req.originalUrl}: ${err.message}`);
       if (!res.headersSent) {
-        return res.status(400).json({
-          error: '请求 JSON 格式无效',
-          code: 'INVALID_JSON',
-          detail: err.message,
-        });
+        return apiError(
+          req,
+          res,
+          400,
+          {
+            error: '请求 JSON 格式无效',
+            code: 'INVALID_JSON',
+            detail: err.message,
+          },
+          { parseError: err.message }
+        );
       }
     }
     const tooLarge =
@@ -158,12 +176,17 @@ async function main() {
       err?.statusCode === 413 ||
       /entity too large|payload too large/i.test(String(err?.message || ''));
     if (tooLarge) {
-      log.warn(`HTTP 413 请求体过大 ${req.method} ${req.originalUrl}: ${err?.message || err}`);
       if (!res.headersSent) {
-        return res.status(413).json({
-          error: `请求体超过服务器限制（当前 JSON 上限为 ${jsonBodyLimit}），请缩小图片或使用图片地址 URL`,
-          code: 'PAYLOAD_TOO_LARGE',
-        });
+        return apiError(
+          req,
+          res,
+          413,
+          {
+            error: `请求体超过服务器限制（当前 JSON 上限为 ${jsonBodyLimit}），请缩小图片或使用图片地址 URL`,
+            code: 'PAYLOAD_TOO_LARGE',
+          },
+          { limit: jsonBodyLimit, message: err?.message || String(err) }
+        );
       }
     }
     sendServerError(res, log, req, '服务器内部错误', err, 'UNHANDLED_EXCEPTION');

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { get } from './db.js';
-import { createLogger } from './logger.js';
+import { createLogger, apiError } from './logger.js';
 
 const log = createLogger('nemh.auth');
 
@@ -64,7 +64,10 @@ export function createAuthMiddleware(db) {
   return function authMiddleware(req, res, next) {
     const raw = req.headers.authorization;
     if (!raw || !raw.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '未登录或缺少 Token' });
+      return apiError(req, res, 401, {
+        error: '未登录或缺少 Token',
+        code: 'MISSING_TOKEN',
+      });
     }
     const token = raw.slice(7);
     let userId;
@@ -72,17 +75,31 @@ export function createAuthMiddleware(db) {
       const payload = jwt.verify(token, JWT_SECRET);
       userId = Number(payload.sub);
       if (!Number.isInteger(userId) || userId < 1) {
-        return res.status(401).json({ error: '登录已失效，请重新登录' });
+        return apiError(req, res, 401, {
+          error: '登录已失效，请重新登录',
+          code: 'INVALID_TOKEN_SUB',
+        });
       }
-    } catch {
-      return res.status(401).json({ error: '登录已失效，请重新登录' });
+    } catch (e) {
+      return apiError(
+        req,
+        res,
+        401,
+        { error: '登录已失效，请重新登录', code: 'INVALID_TOKEN' },
+        { jwtError: e?.message || String(e) }
+      );
     }
 
     get(db, 'SELECT id, username, role FROM users WHERE id = ?', [userId])
       .then((row) => {
         if (!row) {
-          log.warn(`JWT 有效但用户不存在或已删除: userId=${userId}`);
-          return res.status(401).json({ error: '用户不存在或已删除' });
+          return apiError(
+            req,
+            res,
+            401,
+            { error: '用户不存在或已删除', code: 'USER_NOT_FOUND' },
+            { userId }
+          );
         }
         req.admin = {
           id: row.id,
@@ -98,7 +115,13 @@ export function createAuthMiddleware(db) {
       })
       .catch((e) => {
         log.error(`鉴权查询用户失败: ${e?.message || e}`);
-        res.status(500).json({ error: '鉴权失败' });
+        apiError(
+          req,
+          res,
+          500,
+          { error: '鉴权失败', code: 'AUTH_DB_ERROR' },
+          { message: e?.message || String(e) }
+        );
       });
   };
 }
@@ -108,7 +131,13 @@ export function requireStatisticsRole(req, res, next) {
   if (isBuiltInSuperAdmin(req) || req.admin?.role === 'statistics') {
     return next();
   }
-  return res.status(403).json({ error: '仅统计部可操作' });
+  return apiError(
+    req,
+    res,
+    403,
+    { error: '仅统计部可操作', code: 'STATISTICS_ROLE_REQUIRED' },
+    { role: req.admin?.role, username: req.admin?.username }
+  );
 }
 
 /** 仅库房：收货定价、入库录入、出库等（admin 超级管理员亦放行） */
@@ -116,7 +145,13 @@ export function requireWarehouseRole(req, res, next) {
   if (isBuiltInSuperAdmin(req) || req.admin?.role === 'warehouse') {
     return next();
   }
-  return res.status(403).json({ error: '仅库房可操作' });
+  return apiError(
+    req,
+    res,
+    403,
+    { error: '仅库房可操作', code: 'WAREHOUSE_ROLE_REQUIRED' },
+    { role: req.admin?.role, username: req.admin?.username }
+  );
 }
 
 /** 仅统计部：发布对外统一市场报价（语义别名，与 requireStatisticsRole 一致） */

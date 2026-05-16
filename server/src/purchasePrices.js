@@ -1,15 +1,12 @@
 import { run, all, get } from './db.js';
 import { requireWarehouseRole } from './auth.js';
-import { createLogger, sendServerError } from './logger.js';
+import { createLogger, apiError, sendServerError } from './logger.js';
 
 const log = createLogger('nemh.purchasePrices');
 
-/** 400：写入 api.log，响应带 code 便于前端区分 */
-function badRequest(req, res, message, code = 'VALIDATION_ERROR') {
-  log.warn(
-    `HTTP 400 ${req.method} ${req.originalUrl} code=${code} userId=${req.admin?.id ?? '-'}: ${message}`
-  );
-  return res.status(400).json({ error: message, code });
+/** 400：写入 nemh.api 明细行，响应带 code 便于前端区分 */
+function badRequest(req, res, message, code = 'VALIDATION_ERROR', context) {
+  return apiError(req, res, 400, { error: message, code }, context);
 }
 
 const PRICE_ROW_SQL = `SELECT pp.id,

@@ -1,6 +1,6 @@
 import { run, all, get } from './db.js';
 import { requireStatisticsRole, requireWarehouseRole } from './auth.js';
-import { createLogger, setApiLogContext } from './logger.js';
+import { createLogger, apiError } from './logger.js';
 
 const log = createLogger('nemh.inboundOrders');
 
@@ -223,7 +223,7 @@ async function validateInboundPayload(db, body) {
   };
 }
 
-function respondInboundValidationError(res, validated) {
+function respondInboundValidationError(req, res, validated) {
   const payload = {
     error: validated.error,
     code: validated.code || 'VALIDATION_ERROR',
@@ -231,13 +231,12 @@ function respondInboundValidationError(res, validated) {
   if (validated.latestPurchaseUnitPrice != null) {
     payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
   }
-  setApiLogContext(res, {
+  return apiError(req, res, validated.status || 400, payload, {
     materialId: validated.materialId,
     warehouseId: validated.warehouseId,
     enteredUnitPrice: validated.enteredUnitPrice,
     latestPurchaseUnitPrice: validated.latestPurchaseUnitPrice,
   });
-  return res.status(validated.status || 400).json(payload);
 }
 
 export function registerInboundOrderRoutes(app, db, authMiddleware) {
@@ -333,7 +332,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       const body = req.body || {};
       const validated = await validateInboundPayload(db, body);
       if (validated.error) {
-        return respondInboundValidationError(res, validated);
+        return respondInboundValidationError(req, res, validated);
       }
 
       const {
@@ -417,15 +416,17 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         ]);
         if (!existing) return res.status(404).json({ error: '入库单不存在' });
         if (existing.audit_status !== 'pending') {
-          setApiLogContext(res, {
-            inboundOrderId: id,
-            orderNo: existing.order_no,
-            auditStatus: existing.audit_status,
-          });
-          return res.status(400).json({
-            error: '仅待审核状态的入库单可修改',
-            code: 'INBOUND_NOT_PENDING',
-          });
+          return apiError(
+            req,
+            res,
+            400,
+            { error: '仅待审核状态的入库单可修改', code: 'INBOUND_NOT_PENDING' },
+            {
+              inboundOrderId: id,
+              orderNo: existing.order_no,
+              auditStatus: existing.audit_status,
+            }
+          );
         }
         const linked = await get(
           db,
@@ -433,17 +434,19 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
           [id]
         );
         if (linked) {
-          setApiLogContext(res, { inboundOrderId: id, orderNo: existing.order_no });
-          return res.status(400).json({
-            error: '已存在出库子单关联，不可修改',
-            code: 'INBOUND_LINKED_OUTBOUND',
-          });
+          return apiError(
+            req,
+            res,
+            400,
+            { error: '已存在出库子单关联，不可修改', code: 'INBOUND_LINKED_OUTBOUND' },
+            { inboundOrderId: id, orderNo: existing.order_no }
+          );
         }
 
         const body = req.body || {};
         const validated = await validateInboundPayload(db, body);
         if (validated.error) {
-          return respondInboundValidationError(res, validated);
+          return respondInboundValidationError(req, res, validated);
         }
 
         const photo =
