@@ -207,10 +207,9 @@
   }
 
   function normalizeInbound(io) {
-    const st = io.auditStatus || io.audit_status || 'pending';
-    let status = 'pending';
-    if (st === 'approved') status = 'approved';
-    else if (st === 'rejected') status = 'rejected';
+    const st = io.auditStatus || io.audit_status || 'approved';
+    let status = 'approved';
+    if (st === 'rejected') status = 'rejected';
     const inboundAt = io.inboundAt || io.inbound_at || '';
     const photoRaw = io.photo != null ? io.photo : io.inboundPhoto;
     const photo = typeof photoRaw === 'string' ? photoRaw.trim() : '';
@@ -239,7 +238,8 @@
   }
 
   function normalizeOutboundHeader(o) {
-    const pending = o.status === 'pending';
+    const apiStatus = o.status === 'completed' ? 'completed' : 'pending';
+    const pending = apiStatus === 'pending';
     const rawCreated = o.createdAt || o.created_at || '';
     const rawUpdated = o.updatedAt || o.updated_at || '';
     const displayTime = pending
@@ -253,6 +253,9 @@
       preWeight: Number(o.plannedWeight != null ? o.plannedWeight : o.planned_weight),
       actualWeight: Number(o.actualWeight != null ? o.actualWeight : o.actual_weight || 0),
       price: Number(o.unitPrice != null ? o.unitPrice : o.unit_price),
+      /** 后端原始状态：pending | completed */
+      apiStatus: apiStatus,
+      /** 界面 Tab：pending 映射为 pre_outbound，实际出库 Tab 另按 apiStatus 纳入 */
       status: pending ? 'pre_outbound' : 'completed',
       date: displayTime || formatApiTimeToDisplay(new Date().toISOString()),
       createdAt: rawCreated,
@@ -265,15 +268,31 @@
   function fifoLinesToSuborders(outboundId, lines) {
     if (!Array.isArray(lines)) return [];
     return lines.map(function (ln) {
+      const actualWeight = Number(
+        ln.actualWeight != null ? ln.actualWeight : ln.actual_weight || 0
+      );
+      const preWeight = Number(ln.plannedWeight != null ? ln.plannedWeight : ln.planned_weight);
+      const inboundUnitPrice = Number(
+        ln.inboundUnitPrice != null ? ln.inboundUnitPrice : ln.inbound_unit_price
+      );
       return {
         id: ln.id,
         outboundOrderId: outboundId,
         inboundOrderId: ln.inboundOrderId,
-        preWeight: Number(ln.plannedWeight != null ? ln.plannedWeight : ln.planned_weight),
-        actualWeight: Number(ln.actualWeight != null ? ln.actualWeight : ln.actual_weight || 0),
-        status: 'pre_outbound',
+        inboundOrderNo: ln.inboundOrderNo || ln.inbound_order_no || '',
+        lineNo: Number(ln.lineNo != null ? ln.lineNo : ln.line_no) || 0,
+        subOrderNo: ln.subOrderNo || ln.sub_order_no || '',
+        inboundAt: ln.inboundAt || ln.inbound_at || '',
+        inboundUnitPrice: Number.isFinite(inboundUnitPrice) ? inboundUnitPrice : null,
+        preWeight: preWeight,
+        actualWeight: actualWeight,
+        status: actualWeight > 0 ? 'completed' : 'pre_outbound',
       };
     });
+  }
+
+  function fetchOutboundDetail(id) {
+    return apiFetch('/api/admin/outbound-orders/' + id);
   }
 
   function buildQuotationsFromSalePrices(prices) {
@@ -332,7 +351,6 @@
     appState.outboundOrders = orders;
     appState.outboundSuborders = [];
     for (let i = 0; i < rawList.length; i++) {
-      if (rawList[i].status !== 'pending') continue;
       const det = await apiFetch('/api/admin/outbound-orders/' + rawList[i].id);
       const subs = fifoLinesToSuborders(rawList[i].id, det.fifoLines || []);
       appState.outboundSuborders = appState.outboundSuborders.concat(subs);
@@ -360,6 +378,38 @@
     } catch (e) {
       appState.users = [];
     }
+
+    enrichInboundOrdersFromFifo(appState);
+  }
+
+  function enrichInboundOrdersFromFifo(appState) {
+    const subsByInbound = new Map();
+    (appState.outboundSuborders || []).forEach(function (sub) {
+      const iid = sub.inboundOrderId;
+      if (iid == null) return;
+      if (!subsByInbound.has(iid)) subsByInbound.set(iid, []);
+      subsByInbound.get(iid).push(sub);
+    });
+    appState.inboundOrders = (appState.inboundOrders || []).map(function (order) {
+      if (order.status === 'rejected') return order;
+      const subs = subsByInbound.get(order.id) || [];
+      let preOutboundWeight = 0;
+      let actualOutboundWeight = 0;
+      subs.forEach(function (s) {
+        preOutboundWeight += Number(s.preWeight) || 0;
+        actualOutboundWeight += Number(s.actualWeight) || 0;
+      });
+      const weight = Number(order.weight) || 0;
+      let status = 'approved';
+      if (actualOutboundWeight >= weight && weight > 0) status = 'completed';
+      else if (actualOutboundWeight > 0) status = 'partial';
+      else if (preOutboundWeight > 0) status = 'outbounding';
+      return Object.assign({}, order, {
+        preOutboundWeight: preOutboundWeight,
+        actualOutboundWeight: actualOutboundWeight,
+        status: status,
+      });
+    });
   }
 
   window.InventoryApi = {
@@ -417,6 +467,8 @@
     completeOutbound: function (id, body) {
       return apiFetch('/api/admin/outbound-orders/' + id + '/complete', { method: 'PUT', body: body });
     },
+    fetchOutboundDetail: fetchOutboundDetail,
+    fifoLinesToSuborders: fifoLinesToSuborders,
     inboundSummaryAlerts: function (query) {
       const q = query || {};
       const params = new URLSearchParams();

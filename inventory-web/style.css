@@ -846,12 +846,103 @@ body {
     font-size: 14px;
 }
 
-.search-box i {
+.search-box-btn {
     position: absolute;
-    right: 12px;
+    right: 4px;
     top: 50%;
     transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
     color: #95a5a6;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-box-btn:hover {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.view-multi-img-wrap img,
+#weighing-slip-preview-img,
+.image-previewable {
+    cursor: zoom-in;
+}
+
+.image-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.image-lightbox[hidden] {
+    display: none !important;
+}
+
+.image-lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.image-lightbox-panel {
+    position: relative;
+    z-index: 1;
+    max-width: min(96vw, 1200px);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+.image-lightbox-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e9ecef;
+    flex-wrap: wrap;
+}
+
+.image-lightbox-stage {
+    flex: 1;
+    min-height: 200px;
+    max-height: calc(92vh - 100px);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1a1a1a;
+    padding: 12px;
+}
+
+.image-lightbox-stage img {
+    max-width: 100%;
+    max-height: calc(92vh - 120px);
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 0.15s ease;
+}
+
+.image-lightbox-caption {
+    margin: 0;
+    padding: 8px 12px 12px;
+    font-size: 13px;
+    color: #666;
+    text-align: center;
 }
 
 .filter-group {
@@ -2085,6 +2176,11 @@ body {
 
 .view-multi-img-wrap {
     flex: 0 0 auto;
+}
+
+.outbound-detail-weighing .view-multi-img-wrap img {
+    max-width: 100%;
+    max-height: min(360px, 50vh);
 }
 
 .view-multi-img-wrap img {

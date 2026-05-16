@@ -266,11 +266,9 @@ function createDemoData() {
             weight: 30,
             unitPrice: 290000,
             totalPrice: 8700000,
-            status: 'pending',
+            status: 'approved',
             date: '2023-10-27 14:20',
             images: [],
-            reviewerId: null,
-            reviewDate: null,
             actualOutboundWeight: 0,
             preOutboundWeight: 0
         },
@@ -334,7 +332,7 @@ function createDemoData() {
         { id: 1, type: 'login', detail: '用户登录系统', userId: 1, time: '2023-10-27 09:00:00' },
         { id: 2, type: 'pricing', detail: '新增新能源定价 ¥290,000/吨', userId: 3, time: '2023-10-27 09:30:00' },
         { id: 3, type: 'inbound', detail: '创建入库单 RK-20231027-0001', userId: 3, time: '2023-10-27 10:00:00' },
-        { id: 4, type: 'review', detail: '审核入库单 RK-20231027-0002', userId: 2, time: '2023-10-27 10:30:00' },
+        { id: 4, type: 'inbound', detail: '入库通过 RK-20231027-0002', userId: 2, time: '2023-10-27 10:30:00' },
         { id: 5, type: 'outbound', detail: '创建预出库计划 CK-20231027-0001', userId: 3, time: '2023-10-27 11:00:00' }
     ];
 
@@ -526,6 +524,59 @@ function renderDashboardLatestPrices() {
     });
 }
 
+/** 入庫業務狀態：創建即通過，歷史 pending 視同 approved */
+function normalizeInboundFlowStatus(status) {
+    if (status === 'pending') return 'approved';
+    return status;
+}
+
+function inboundOrderHasOutboundLink(order) {
+    if (!order) return false;
+    const w = Number(order.actualOutboundWeight) || 0;
+    const p = Number(order.preOutboundWeight) || 0;
+    const st = normalizeInboundFlowStatus(order.status);
+    return w > 0 || p > 0 || st === 'outbounding' || st === 'partial' || st === 'completed';
+}
+
+function canEditInboundOrder(order) {
+    if (!order || order.status === 'rejected') return false;
+    return !inboundOrderHasOutboundLink(order);
+}
+
+function canDeleteInboundOrder(order) {
+    return canEditInboundOrder(order);
+}
+
+function inboundStatusBadgeHtml(status) {
+    const st = normalizeInboundFlowStatus(status);
+    switch (st) {
+        case 'approved':
+            return '<span class="badge badge-success">待出库</span>';
+        case 'rejected':
+            return '<span class="badge badge-danger">已驳回</span>';
+        case 'outbounding':
+            return '<span class="badge badge-info">出库中</span>';
+        case 'partial':
+            return '<span class="badge badge-secondary">部分已出库</span>';
+        case 'completed':
+            return '<span class="badge badge-success">全部已出库</span>';
+        default:
+            return `<span class="badge badge-secondary">${status || '-'}</span>`;
+    }
+}
+
+function inboundStatusDetailText(status) {
+    const st = normalizeInboundFlowStatus(status);
+    const map = {
+        approved: '待出库',
+        rejected: '已驳回',
+        outbounding: '出库中',
+        partial: '部分已出库',
+        completed: '全部已出库',
+    };
+    return map[st] || st || '-';
+}
+
 /** 入庫單：date 補齊；images[] 與舊 image 合併後寫入 images，移除 image */
 function normalizeInboundOrders() {
     AppState.inboundOrders = (AppState.inboundOrders || []).map((o) => {
@@ -540,6 +591,9 @@ function normalizeInboundOrders() {
             if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
                 next = { ...next, date: `${s} 00:00` };
             }
+        }
+        if (next.status === 'pending') {
+            next = { ...next, status: 'approved' };
         }
         return next;
     });
@@ -608,7 +662,24 @@ function setupEventListeners() {
     
     // 收货定价相关
     document.getElementById('add-pricing-btn').addEventListener('click', showAddPricingModal);
-    document.getElementById('pricing-search').addEventListener('input', filterPricingList);
+    const pricingSearch = document.getElementById('pricing-search');
+    if (pricingSearch) {
+        pricingSearch.addEventListener('input', filterPricingList);
+        pricingSearch.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') filterPricingList();
+        });
+    }
+    const pricingSearchBtn = document.getElementById('pricing-search-btn');
+    if (pricingSearchBtn) {
+        pricingSearchBtn.addEventListener('click', function () {
+            const input = document.getElementById('pricing-search');
+            if (input) {
+                input.focus();
+                filterPricingList();
+            }
+        });
+    }
+    initImageLightbox();
     const pricingMarketInput = document.getElementById('pricing-market-image');
     if (pricingMarketInput) {
         pricingMarketInput.addEventListener('change', (e) => {
@@ -1264,6 +1335,122 @@ function formatOutboundTimeDisplay(value) {
     return formatQuotationPublishDisplay(value);
 }
 
+let imageLightboxScale = 1;
+
+function openImageLightbox(src, caption) {
+    const box = document.getElementById('image-lightbox');
+    const img = document.getElementById('image-lightbox-img');
+    const cap = document.getElementById('image-lightbox-caption');
+    if (!box || !img || !src) return;
+    img.src = src;
+    img.alt = caption || '图片预览';
+    if (cap) cap.textContent = caption || '';
+    imageLightboxScale = 1;
+    img.style.transform = 'scale(1)';
+    box.hidden = false;
+    box.setAttribute('aria-hidden', 'false');
+}
+
+function closeImageLightbox() {
+    const box = document.getElementById('image-lightbox');
+    const img = document.getElementById('image-lightbox-img');
+    if (!box) return;
+    box.hidden = true;
+    box.setAttribute('aria-hidden', 'true');
+    if (img) {
+        img.src = '';
+        img.style.transform = '';
+    }
+}
+
+function imageLightboxZoom(delta) {
+    const img = document.getElementById('image-lightbox-img');
+    if (!img) return;
+    imageLightboxScale = Math.min(4, Math.max(0.25, imageLightboxScale + delta));
+    img.style.transform = `scale(${imageLightboxScale})`;
+}
+
+function imageLightboxResetZoom() {
+    imageLightboxScale = 1;
+    const img = document.getElementById('image-lightbox-img');
+    if (img) img.style.transform = 'scale(1)';
+}
+
+function initImageLightbox() {
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.image-lightbox-toolbar, .image-lightbox-backdrop')) return;
+        const img = e.target.closest(
+            '.view-multi-img-wrap img, #weighing-slip-preview-img, .image-previewable'
+        );
+        if (!img || !img.src || img.closest('#image-lightbox')) return;
+        e.preventDefault();
+        openImageLightbox(img.src, img.alt || '图片预览');
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeImageLightbox();
+    });
+}
+
+function getWarehouseLabel(warehouseId) {
+    if (warehouseId == null || warehouseId === '') return '-';
+    const w = AppState.warehouses.find((x) => x.id === warehouseId);
+    return w ? `${w.code} - ${w.name}` : '-';
+}
+
+function formatPricingRecordNo(record) {
+    const id = record && record.id != null ? record.id : '';
+    return id !== '' ? `PP-${String(id).padStart(4, '0')}` : '-';
+}
+
+/** 出库历史：汇总 FIFO 关联的入库单号（去重，顿号分隔） */
+function formatOutboundInboundOrderNos(outboundOrderId) {
+    const subs = AppState.outboundSuborders.filter(
+        (s) => s.outboundOrderId === outboundOrderId
+    );
+    if (!subs.length) return '-';
+    const seen = new Set();
+    const parts = [];
+    subs.forEach((sub) => {
+        const fromSub = sub.inboundOrderNo && String(sub.inboundOrderNo).trim();
+        if (fromSub) {
+            if (!seen.has(fromSub)) {
+                seen.add(fromSub);
+                parts.push(fromSub);
+            }
+            return;
+        }
+        const inbound = AppState.inboundOrders.find((o) => o.id === sub.inboundOrderId);
+        const no = inbound?.orderNo;
+        if (no && !seen.has(no)) {
+            seen.add(no);
+            parts.push(no);
+        }
+    });
+    return parts.length ? parts.join('、') : '-';
+}
+
+/** 按子单 FIFO 分摊出库成本（与报表、出库历史一致） */
+function allocateOutboundOrderCost(order) {
+    const actualW = Number(order.actualWeight) || 0;
+    if (actualW <= 0) return 0;
+    let cost = 0;
+    let remainingWeight = actualW;
+    const suborders = AppState.outboundSuborders.filter((s) => s.outboundOrderId === order.id);
+    for (const suborder of suborders) {
+        if (remainingWeight <= 0) break;
+        const inboundOrder = AppState.inboundOrders.find((o) => o.id === suborder.inboundOrderId);
+        if (!inboundOrder) continue;
+        const subAct = Number(suborder.actualWeight) || 0;
+        const subPre = Number(suborder.preWeight) || 0;
+        const lineWeight = subAct > 0 ? subAct : subPre;
+        if (lineWeight <= 0) continue;
+        const allocateWeight = Math.min(lineWeight, remainingWeight);
+        cost += allocateWeight * (Number(inboundOrder.unitPrice) || 0);
+        remainingWeight -= allocateWeight;
+    }
+    return cost;
+}
+
 function parseDateTime(dateTimeStr) {
     if (!dateTimeStr) return null;
     const s = String(dateTimeStr).trim();
@@ -1370,7 +1557,14 @@ function setElementText(id, text) {
 
 // 更新仪表板统计数据（与 index.html 中 stat 卡片 id 一致）
 function updateDashboardStats() {
-    const pendingInboundCount = AppState.inboundOrders.filter((order) => order.status === 'pending').length;
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthInboundCount = AppState.inboundOrders.filter((order) => {
+        const st = normalizeInboundFlowStatus(order.status);
+        if (st === 'rejected') return false;
+        const d = order.date ? String(order.date).slice(0, 7) : '';
+        return d === ym;
+    }).length;
 
     const thresholdEl = document.getElementById('warning-threshold');
     const threshold = thresholdEl ? parseInt(thresholdEl.value, 10) || 30 : 30;
@@ -1393,30 +1587,17 @@ function updateDashboardStats() {
         if (inv.totalAvailable < threshold) warningCount++;
     });
 
-    const now = new Date();
-    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const monthCompleted = AppState.outboundOrders.filter(
         (o) => o.status === 'completed' && o.date && String(o.date).slice(0, 7) === ym
     );
     let monthProfit = 0;
     monthCompleted.forEach((order) => {
         const revenue = order.actualWeight * order.price;
-        let cost = 0;
-        let remainingWeight = order.actualWeight;
-        const suborders = AppState.outboundSuborders.filter((s) => s.outboundOrderId === order.id);
-        for (const suborder of suborders) {
-            if (remainingWeight <= 0) break;
-            const inboundOrder = AppState.inboundOrders.find((o) => o.id === suborder.inboundOrderId);
-            if (!inboundOrder) continue;
-            const allocateWeight = Math.min(suborder.actualWeight, remainingWeight);
-            cost += allocateWeight * inboundOrder.unitPrice;
-            remainingWeight -= allocateWeight;
-        }
-        monthProfit += revenue - cost;
+        monthProfit += revenue - allocateOutboundOrderCost(order);
     });
 
     renderDashboardLatestPrices();
-    setElementText('pending-review-count', String(pendingInboundCount));
+    setElementText('month-inbound-count', String(monthInboundCount));
     setElementText('warning-count', String(warningCount));
     setElementText('month-profit', formatCurrency(monthProfit));
 
@@ -1429,7 +1610,7 @@ function actionTypeLabel(type) {
         pricing: '收货定价',
         inbound: '收货入库',
         warehouse: '库房管理',
-        review: '入库审核',
+        review: '收货入库',
         outbound: '出库管理',
         quotation: '对外报价',
         report: '报表'
@@ -1615,7 +1796,7 @@ function viewPricingImages(id) {
         ? `<div class="view-multi-img-grid">${marketImgs
               .map(
                   (src, i) =>
-                      `<div class="view-multi-img-wrap"><img src="${src}" alt="行情凭证 ${i + 1}"></div>`
+                      `<div class="view-multi-img-wrap"><img class="image-previewable" src="${src}" alt="行情凭证 ${i + 1}"></div>`
               )
               .join('')}</div>`
         : '<div class="no-image">暂无行情凭证</div>';
@@ -1624,7 +1805,7 @@ function viewPricingImages(id) {
         ? `<div class="view-multi-img-grid">${selfImgs
               .map(
                   (src, i) =>
-                      `<div class="view-multi-img-wrap"><img src="${src}" alt="收货价格凭证 ${i + 1}"></div>`
+                      `<div class="view-multi-img-wrap"><img class="image-previewable" src="${src}" alt="收货价格凭证 ${i + 1}"></div>`
               )
               .join('')}</div>`
         : '<div class="no-image">暂无收货价格凭证</div>';
@@ -1645,7 +1826,7 @@ function viewInboundImage(id) {
         container.innerHTML = `<div class="view-multi-img-grid">${imgs
             .map(
                 (src, i) =>
-                    `<div class="view-multi-img-wrap"><img src="${src}" alt="入库照片 ${i + 1}"></div>`
+                    `<div class="view-multi-img-wrap"><img class="image-previewable" src="${src}" alt="入库照片 ${i + 1}"></div>`
             )
             .join('')}</div>`;
     } else {
@@ -1692,9 +1873,19 @@ function loadPricingPage() {
             : '';
 
         const row = document.createElement('tr');
+        const searchText = [
+            formatPricingRecordNo(record),
+            String(record.id),
+            material.code,
+            material.name,
+            record.note || '',
+        ]
+            .join(' ')
+            .toLowerCase();
+        row.dataset.search = searchText;
         row.innerHTML = `
-            <td>${material.code}</td>
-            <td>${material.name}</td>
+            <td>${formatPricingRecordNo(record)}</td>
+            <td>${material.code} - ${material.name}</td>
             <td>${formatCurrency(record.price)}/${material.unit}</td>
             <td class="datetime-display">${displayTime}</td>
             <td>
@@ -1706,16 +1897,23 @@ function loadPricingPage() {
         `;
         pricingList.appendChild(row);
     });
+    filterPricingList();
 }
 
 // 过滤定价列表
 function filterPricingList() {
-    const searchTerm = document.getElementById('pricing-search').value.toLowerCase();
+    const input = document.getElementById('pricing-search');
+    const searchTerm = (input ? input.value : '').trim().toLowerCase();
     const rows = document.querySelectorAll('#pricing-list tr');
     
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    rows.forEach((row) => {
+        if (!searchTerm) {
+            row.style.display = '';
+            return;
+        }
+        const haystack =
+            row.dataset.search || row.textContent.toLowerCase();
+        row.style.display = haystack.includes(searchTerm) ? '' : 'none';
     });
 }
 
@@ -2008,29 +2206,9 @@ function loadInboundPage() {
         const warehouse = AppState.warehouses.find(w => w.id === order.warehouseId);
         if (!material || !warehouse) return;
         
-        let statusBadge = '';
-        switch (order.status) {
-            case 'pending':
-                statusBadge = '<span class="badge badge-warning">待审核</span>';
-                break;
-            case 'approved':
-                statusBadge = '<span class="badge badge-success">已审核待出库</span>';
-                break;
-            case 'rejected':
-                statusBadge = '<span class="badge badge-danger">已驳回</span>';
-                break;
-            case 'outbounding':
-                statusBadge = '<span class="badge badge-info">出库中</span>';
-                break;
-            case 'partial':
-                statusBadge = '<span class="badge badge-secondary">部分已出库</span>';
-                break;
-            case 'completed':
-                statusBadge = '<span class="badge badge-success">全部已出库</span>';
-                break;
-            default:
-                statusBadge = `<span class="badge badge-secondary">${order.status || '-'}</span>`;
-        }
+        const flowStatus = normalizeInboundFlowStatus(order.status);
+        const statusBadge = inboundStatusBadgeHtml(order.status);
+        const showMutate = canEditInboundOrder(order);
 
         const whLabel = `${warehouse.code} - ${warehouse.name}`;
         const matLabel = `${material.code} - ${material.name}`;
@@ -2042,6 +2220,7 @@ function loadInboundPage() {
                 : '<span style="color:#888;">-</span>';
 
         const row = document.createElement('tr');
+        row.dataset.inboundStatus = flowStatus;
         row.innerHTML = `
             <td>${order.orderNo}</td>
             <td>${whLabel}</td>
@@ -2052,8 +2231,8 @@ function loadInboundPage() {
             <td>${outboundPriceCell}</td>
             <td>${timeIn}</td>
             <td>
-                ${order.status === 'pending' ? `
-                    <button class="btn btn-sm btn-icon" onclick="editInbound(${order.id})">
+                ${showMutate ? `
+                    <button class="btn btn-sm btn-icon" onclick="editInbound(${order.id})" title="编辑">
                         <i class="fas fa-edit"></i>
                     </button>
                 ` : ''}
@@ -2063,8 +2242,8 @@ function loadInboundPage() {
                 <button type="button" class="btn btn-sm btn-icon btn-view" onclick="viewInboundImage(${order.id})" title="入库凭证照片">
                     <i class="fas fa-image"></i>
                 </button>
-                ${order.status === 'pending' ? `
-                    <button class="btn btn-sm btn-icon btn-danger" onclick="deleteInbound(${order.id})">
+                ${showMutate ? `
+                    <button class="btn btn-sm btn-icon btn-danger" onclick="deleteInbound(${order.id})" title="删除">
                         <i class="fas fa-trash"></i>
                     </button>
                 ` : ''}
@@ -2079,23 +2258,13 @@ function filterInboundList() {
     const statusFilter = document.getElementById('inbound-status-filter').value;
     const rows = document.querySelectorAll('#inbound-list tr');
     
-    rows.forEach(row => {
+    rows.forEach((row) => {
         if (!statusFilter || statusFilter === 'all') {
             row.style.display = '';
             return;
         }
-        
-        const statusText = row.querySelector('td:nth-child(6)').textContent;
-        const statusMap = {
-            pending: '待审核',
-            approved: '已审核待出库',
-            rejected: '已驳回',
-            outbounding: '出库中',
-            partial: '部分已出库',
-            completed: '全部已出库'
-        };
-        
-        row.style.display = statusText.includes(statusMap[statusFilter]) ? '' : 'none';
+        const ds = row.dataset.inboundStatus || '';
+        row.style.display = ds === statusFilter ? '' : 'none';
     });
 }
 
@@ -2272,11 +2441,9 @@ function saveInbound() {
         weight: weight,
         unitPrice: unitPrice,
         totalPrice: weight * unitPrice,
-        status: 'pending',
+        status: 'approved',
         date: storedDate,
         images: [...AppState.tempInboundImages],
-        reviewerId: null,
-        reviewDate: null,
         actualOutboundWeight: 0,
         preOutboundWeight: 0
     };
@@ -2310,9 +2477,6 @@ function viewInbound(id) {
     
     const material = AppState.materials.find(m => m.id === order.materialId);
     const warehouse = AppState.warehouses.find(w => w.id === order.warehouseId);
-    const reviewer = order.reviewerId ? AppState.users.find(u => u.id === order.reviewerId) : null;
-    const reviewerDisplayName = reviewer ? reviewer.name : order.reviewerUsername || '-';
-    
     // 填充详情
     document.getElementById('view-order-no').textContent = order.orderNo;
     document.getElementById('view-material').textContent = material ? `${material.code} - ${material.name}` : '-';
@@ -2322,25 +2486,7 @@ function viewInbound(id) {
     document.getElementById('view-total-price').textContent = formatCurrency(order.totalPrice);
     document.getElementById('view-date').textContent = formatQuotationPublishDisplay(order.date);
     
-    let statusText = '';
-    switch(order.status) {
-        case 'pending':
-            statusText = '待审核';
-            break;
-        case 'approved':
-            statusText = '已审核';
-            break;
-        case 'rejected':
-            statusText = '已驳回';
-            break;
-        case 'outbounding':
-            statusText = '出库中';
-            break;
-    }
-    document.getElementById('view-status').textContent = statusText;
-    
-    document.getElementById('view-reviewer').textContent = reviewerDisplayName;
-    document.getElementById('view-review-date').textContent = order.reviewDate || '-';
+    document.getElementById('view-status').textContent = inboundStatusDetailText(order.status);
     document.getElementById('view-actual-outbound').textContent = `${order.actualOutboundWeight} ${material?.unit || '吨'}`;
     document.getElementById('view-pre-outbound').textContent = `${order.preOutboundWeight} ${material?.unit || '吨'}`;
 
@@ -2353,7 +2499,7 @@ function viewInbound(id) {
             imgWrap.innerHTML = `<div class="view-multi-img-grid">${imgs
                 .map(
                     (src, i) =>
-                        `<div class="view-multi-img-wrap"><img src="${src}" alt="入库凭证 ${i + 1}"></div>`
+                        `<div class="view-multi-img-wrap"><img class="image-previewable" src="${src}" alt="入库凭证 ${i + 1}"></div>`
                 )
                 .join('')}</div>`;
         } else {
@@ -2369,7 +2515,10 @@ function viewInbound(id) {
 // 编辑入库单
 function editInbound(id) {
     const order = AppState.inboundOrders.find(o => o.id === id);
-    if (!order || order.status !== 'pending') return;
+    if (!canEditInboundOrder(order)) {
+        showMessage('该入库单已关联出库或已出库，不可修改', 'error');
+        return;
+    }
     
     // 填充表单
     document.getElementById('inbound-material').value = order.materialId;
@@ -2436,8 +2585,8 @@ function updateInbound(id) {
     if (useApiMode()) {
         const orderBefore = AppState.inboundOrders.find((o) => o.id === id);
         if (!orderBefore) return;
-        if (orderBefore.status !== 'pending') {
-            showMessage('只能修改待审核状态的入库单', 'error');
+        if (!canEditInboundOrder(orderBefore)) {
+            showMessage('该入库单已关联出库或已出库，不可修改', 'error');
             return;
         }
         const imgs =
@@ -2484,6 +2633,10 @@ function updateInbound(id) {
     if (orderIndex === -1) return;
     
     const prevOrder = AppState.inboundOrders[orderIndex];
+    if (!canEditInboundOrder(prevOrder)) {
+        showMessage('该入库单已关联出库或已出库，不可修改', 'error');
+        return;
+    }
     const { image: _legacyImg, ...prevRest } = prevOrder;
 
     AppState.inboundOrders[orderIndex] = {
@@ -2523,8 +2676,8 @@ function deleteInbound(id) {
     if (useApiMode()) {
         const orderBefore = AppState.inboundOrders.find((o) => o.id === id);
         if (!orderBefore) return;
-        if (orderBefore.status !== 'pending') {
-            showMessage('只能删除待审核状态的入库单', 'error');
+        if (!canDeleteInboundOrder(orderBefore)) {
+            showMessage('该入库单已关联出库或已出库，不可删除', 'error');
             return;
         }
         const label = orderBefore.orderNo || '#' + id;
@@ -2547,8 +2700,8 @@ function deleteInbound(id) {
     if (orderIndex === -1) return;
     
     const order = AppState.inboundOrders[orderIndex];
-    if (order.status !== 'pending') {
-        showMessage('只能删除待审核状态的入库单', 'error');
+    if (!canDeleteInboundOrder(order)) {
+        showMessage('该入库单已关联出库或已出库，不可删除', 'error');
         return;
     }
     
@@ -3103,7 +3256,20 @@ function loadOutboundPage() {
     switchTab('pre-outbound');
 }
 
-function outboundOrderStatusLabel(status) {
+/** API pending 在「实际出库」Tab 展示为待完成 */
+function isOutboundActualTabOrder(order) {
+    if (!order) return false;
+    if (order.status === 'actual_outbound') return true;
+    return useApiMode() && order.apiStatus === 'pending';
+}
+
+function outboundOrderStatusLabel(orderOrStatus) {
+    const order =
+        orderOrStatus && typeof orderOrStatus === 'object' ? orderOrStatus : null;
+    const status = order ? order.status : orderOrStatus;
+    if (order && useApiMode() && order.apiStatus === 'pending') {
+        return '待完成出库';
+    }
     switch (status) {
         case 'pre_outbound':
             return '预出库';
@@ -3116,7 +3282,13 @@ function outboundOrderStatusLabel(status) {
     }
 }
 
-function outboundStatusBadgeClass(status) {
+function outboundStatusBadgeClass(orderOrStatus) {
+    const order =
+        orderOrStatus && typeof orderOrStatus === 'object' ? orderOrStatus : null;
+    const status = order ? order.status : orderOrStatus;
+    if (order && useApiMode() && order.apiStatus === 'pending') {
+        return 'badge-warning';
+    }
     switch (status) {
         case 'pre_outbound':
             return 'badge-info';
@@ -3131,18 +3303,7 @@ function outboundStatusBadgeClass(status) {
 
 /** 已完成出库单：按子单汇总成本（与报表中心逻辑一致） */
 function computeCompletedOutboundTotalCost(order) {
-    let cost = 0;
-    let remainingWeight = order.actualWeight;
-    const suborders = AppState.outboundSuborders.filter((s) => s.outboundOrderId === order.id);
-    for (const suborder of suborders) {
-        if (remainingWeight <= 0) break;
-        const inboundOrder = AppState.inboundOrders.find((o) => o.id === suborder.inboundOrderId);
-        if (!inboundOrder) continue;
-        const allocateWeight = Math.min(suborder.actualWeight, remainingWeight);
-        cost += allocateWeight * inboundOrder.unitPrice;
-        remainingWeight -= allocateWeight;
-    }
-    return cost;
+    return allocateOutboundOrderCost(order);
 }
 
 // 加载出库标签页内容（表格列与 index.html 表头严格一致）
@@ -3159,7 +3320,9 @@ function loadOutboundTab(tab) {
             filteredOrders = AppState.outboundOrders.filter((order) => order.status === 'pre_outbound');
             break;
         case 'actual-outbound':
-            filteredOrders = AppState.outboundOrders.filter((order) => order.status === 'actual_outbound');
+            filteredOrders = AppState.outboundOrders.filter((order) =>
+                isOutboundActualTabOrder(order)
+            );
             break;
         case 'outbound-history':
             filteredOrders = AppState.outboundOrders.filter((order) => order.status === 'completed');
@@ -3171,8 +3334,8 @@ function loadOutboundTab(tab) {
         if (!material) return;
         
         const row = document.createElement('tr');
-        const stLabel = outboundOrderStatusLabel(order.status);
-        const stClass = outboundStatusBadgeClass(order.status);
+        const stLabel = outboundOrderStatusLabel(order);
+        const stClass = outboundStatusBadgeClass(order);
         
         if (tab === 'pre-outbound') {
             row.innerHTML = `
@@ -3195,10 +3358,6 @@ function loadOutboundTab(tab) {
                 </td>
             `;
         } else if (tab === 'actual-outbound') {
-            const hasSlip = Boolean(order.weighingSlipImage);
-            const viewSlipBtn = hasSlip
-                ? `<button type="button" class="btn btn-sm btn-info" onclick="viewWeighingSlip(${order.id})"><i class="fas fa-search"></i> 查看磅单</button>`
-                : `<button type="button" class="btn btn-sm btn-info" disabled title="请先上传磅单"><i class="fas fa-search"></i> 查看磅单</button>`;
             row.innerHTML = `
                 <td>${order.orderNo}</td>
                 <td>${material.name}</td>
@@ -3206,10 +3365,6 @@ function loadOutboundTab(tab) {
                 <td>${order.actualWeight} ${material.unit}</td>
                 <td>${formatCurrency(order.price)}/${material.unit}</td>
                 <td><span class="badge ${stClass}">${stLabel}</span></td>
-                <td>
-                    ${hasSlip ? '<span class="badge badge-success">已上传</span>' : '<span style="color:#888;font-size:12px;">未上传</span>'}
-                    <div style="margin-top:6px;">${viewSlipBtn}</div>
-                </td>
                 <td>
                     <button type="button" class="btn btn-sm btn-warning" onclick="triggerWeighingSlipUpload(${order.id})">
                         <i class="fas fa-upload"></i> 上传磅单
@@ -3227,12 +3382,19 @@ function loadOutboundTab(tab) {
                 order.actualWeight > 0 ? totalCost / order.actualWeight : 0;
             row.innerHTML = `
                 <td>${order.orderNo}</td>
+                <td>${getWarehouseLabel(order.warehouseId)}</td>
                 <td>${material.name}</td>
+                <td>${formatOutboundInboundOrderNos(order.id)}</td>
                 <td>${order.actualWeight} ${material.unit}</td>
                 <td>${formatCurrency(order.price)}/${material.unit}</td>
                 <td>${formatCurrency(avgUnitCost)}/${material.unit}</td>
                 <td>${formatCurrency(profit)}</td>
                 <td>${formatOutboundTimeDisplay(order.date)}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-info" onclick="viewOutboundDetails(${order.id})" title="查看详情">
+                        <i class="fas fa-eye"></i> 详情
+                    </button>
+                </td>
             `;
         }
         
@@ -3254,8 +3416,8 @@ function closeWeighingSlipUploadModal() {
 /** 实际出库页：打开弹窗，填写实际出库重量并上传磅单，提交后即完成出库 */
 function triggerWeighingSlipUpload(outboundOrderId) {
     const order = AppState.outboundOrders.find((o) => o.id === outboundOrderId);
-    const apiPre = useApiMode() && order && order.status === 'pre_outbound';
-    if (!order || (!apiPre && order.status !== 'actual_outbound')) return;
+    const apiPending = useApiMode() && order && order.apiStatus === 'pending';
+    if (!order || (!apiPending && order.status !== 'actual_outbound')) return;
     weighingSlipTargetOutboundId = outboundOrderId;
     const material = AppState.materials.find((m) => m.id === order.materialId);
     const unit = material?.unit || '吨';
@@ -3439,23 +3601,20 @@ async function submitWeighingSlipAndComplete() {
     closeWeighingSlipUploadModal();
 }
 
-/** 查看已上传的磅单图片 */
+/** 查看磅单：打开出库详情并定位到磅单图片 */
 function viewWeighingSlip(outboundOrderId) {
-    const order = AppState.outboundOrders.find((o) => o.id === outboundOrderId);
-    if (!order || !order.weighingSlipImage) {
-        showMessage('暂无磅单图片，请先在「操作」列上传', 'info');
-        return;
-    }
-    const modal = document.getElementById('weighing-slip-view-modal');
-    const img = document.getElementById('weighing-slip-preview-img');
-    const nameEl = document.getElementById('weighing-slip-preview-name');
-    if (!modal || !img) return;
-    img.src = order.weighingSlipImage;
-    img.alt = order.weighingSlipName || '磅单';
-    if (nameEl) {
-        nameEl.textContent = `出库单：${order.orderNo}　文件：${order.weighingSlipName || '未命名'}`;
-    }
-    openModal(modal);
+    viewOutboundDetails(outboundOrderId);
+    setTimeout(function () {
+        const section = document.getElementById('outbound-detail-weighing-section');
+        if (section && section.style.display !== 'none') {
+            section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
+        const order = AppState.outboundOrders.find((o) => o.id === outboundOrderId);
+        if (order && !order.weighingSlipImage) {
+            showMessage('暂无磅单图片', 'info');
+        }
+    }, useApiMode() ? 450 : 80);
 }
 
 // 预出库弹窗：按品种刷新对外报价下拉（发布时间新→旧，默认第一条为最新）
@@ -3532,16 +3691,64 @@ function showAddOutboundModal() {
     const quotationSelect = document.getElementById('outbound-quotation-select');
     materialSelect.onchange = function () {
         refreshOutboundQuotationSelect();
+        void refreshOutboundAvailableHint();
     };
+    if (warehouseSelect) {
+        warehouseSelect.onchange = function () {
+            void refreshOutboundAvailableHint();
+        };
+    }
     if (quotationSelect) {
         quotationSelect.onchange = function () {
             applySelectedQuotationPriceToOutboundInput();
         };
     }
     refreshOutboundQuotationSelect();
+    void refreshOutboundAvailableHint();
     
     // 显示模态框
     openModal(modal);
+}
+
+async function refreshOutboundAvailableHint() {
+    const hint = document.getElementById('outbound-available-hint');
+    const materialId = parseInt(document.getElementById('outbound-material')?.value, 10);
+    const warehouseId = parseInt(document.getElementById('outbound-warehouse')?.value, 10);
+    if (!hint) return;
+    if (!materialId || !warehouseId) {
+        hint.style.display = 'none';
+        return;
+    }
+    const av = await fetchOutboundAvailableTon(materialId, warehouseId);
+    if (av == null) {
+        hint.textContent = '可用库存加载失败，请稍后重试';
+    } else {
+        hint.textContent = `参考可用库存：约 ${av.toFixed(2)} 吨`;
+    }
+    hint.style.display = 'block';
+}
+
+async function fetchOutboundAvailableTon(materialId, warehouseId) {
+    if (!useApiMode() || !window.InventoryApi) {
+        return calculateAvailableInventory(materialId, warehouseId);
+    }
+    try {
+        const data = await window.InventoryApi.inboundSummaryAlerts({
+            basis: 'combined',
+            thresholdTon: 1,
+            onlyReminder: false,
+        });
+        const it = (data.items || []).find(
+            (x) =>
+                x.material &&
+                x.warehouse &&
+                Number(x.material.id) === materialId &&
+                Number(x.warehouse.id) === warehouseId
+        );
+        return it ? Number(it.remainingWeightByBasis || 0) : 0;
+    } catch {
+        return null;
+    }
 }
 
 // 保存出库计划
@@ -3555,14 +3762,6 @@ function saveOutbound() {
         showMessage('请填写完整信息', 'error');
         return;
     }
-
-    if (!useApiMode()) {
-        const availableInventory = calculateAvailableInventory(materialId, warehouseId);
-        if (availableInventory < weight) {
-            showMessage(`库存不足，可用库存为 ${availableInventory} 吨`, 'error');
-            return;
-        }
-    }
     
     const salePrice = parseFloat(document.getElementById('outbound-sale-price').value);
     if (!salePrice || salePrice <= 0) {
@@ -3572,6 +3771,11 @@ function saveOutbound() {
 
     if (useApiMode()) {
         void (async function () {
+            const availableInventory = await fetchOutboundAvailableTon(materialId, warehouseId);
+            if (availableInventory != null && availableInventory < weight) {
+                showMessage(`库存不足，可用库存约 ${availableInventory.toFixed(2)} 吨`, 'error');
+                return;
+            }
             try {
                 await window.InventoryApi.createOutbound({
                     warehouseId: warehouseId,
@@ -3582,12 +3786,19 @@ function saveOutbound() {
                 await window.InventoryApi.refreshAppStateFromServer(AppState);
                 document.getElementById('add-outbound-modal').style.display = 'none';
                 loadOutboundTab('pre-outbound');
+                loadOutboundTab('actual-outbound');
                 updateDashboardStats();
                 showMessage('已创建出库计划', 'success');
             } catch (e) {
                 showMessage(e.message || '创建失败', 'error');
             }
         })();
+        return;
+    }
+
+    const availableInventory = calculateAvailableInventory(materialId, warehouseId);
+    if (availableInventory < weight) {
+        showMessage(`库存不足，可用库存约 ${availableInventory.toFixed(2)} 吨`, 'error');
         return;
     }
     
@@ -3700,63 +3911,187 @@ function createOutboundSuborders(outboundOrderId, materialId, warehouseId, total
     }
 }
 
-// 查看出库详情
-function viewOutboundDetails(id) {
-    const order = AppState.outboundOrders.find(o => o.id === id);
-    if (!order) return;
-    
-    const material = AppState.materials.find(m => m.id === order.materialId);
-    const warehouse = AppState.warehouses.find(w => w.id === order.warehouseId);
-    
-    // 填充基本信息
-    document.getElementById('outbound-detail-order-no').textContent = order.orderNo;
-    document.getElementById('outbound-detail-material').textContent = material ? `${material.code} - ${material.name}` : '-';
-    document.getElementById('outbound-detail-warehouse').textContent = warehouse ? `${warehouse.code} - ${warehouse.name}` : '-';
-    document.getElementById('outbound-detail-pre-weight').textContent = `${order.preWeight} ${material?.unit || '吨'}`;
-    document.getElementById('outbound-detail-actual-weight').textContent = `${order.actualWeight} ${material?.unit || '吨'}`;
-    document.getElementById('outbound-detail-price').textContent = formatCurrency(order.price);
-    document.getElementById('outbound-detail-total-price').textContent = formatCurrency(order.actualWeight * order.price);
-    document.getElementById('outbound-detail-date').textContent = formatOutboundTimeDisplay(order.date);
-    
-    let statusText = '';
-    switch(order.status) {
-        case 'pre_outbound':
-            statusText = '预出库';
-            break;
-        case 'actual_outbound':
-            statusText = '实际出库中';
-            break;
-        case 'completed':
-            statusText = '已完成';
-            break;
+/** 解析 FIFO 子行展示用字段（兼容 API 与离线） */
+function resolveFifoLineDisplay(sub, material) {
+    const unit = material?.unit || '吨';
+    const inbound = AppState.inboundOrders.find((o) => o.id === sub.inboundOrderId);
+    const orderNo =
+        (sub.inboundOrderNo && String(sub.inboundOrderNo).trim()) ||
+        inbound?.orderNo ||
+        (sub.inboundOrderId != null ? `#${sub.inboundOrderId}` : '-');
+    const inboundTimeRaw = sub.inboundAt || inbound?.date || '';
+    const inboundTime = inboundTimeRaw
+        ? formatQuotationPublishDisplay(inboundTimeRaw)
+        : '-';
+    const unitPrice =
+        sub.inboundUnitPrice != null && Number.isFinite(Number(sub.inboundUnitPrice))
+            ? Number(sub.inboundUnitPrice)
+            : inbound?.unitPrice;
+    const preW = Number(sub.preWeight) || 0;
+    const actW = Number(sub.actualWeight) || 0;
+    const costW = actW > 0 ? actW : preW;
+    const lineCost =
+        unitPrice != null && Number.isFinite(unitPrice) ? costW * unitPrice : null;
+    return {
+        lineNo: sub.lineNo || 0,
+        subOrderNo: sub.subOrderNo || '-',
+        orderNo,
+        inboundTime,
+        preW,
+        actW,
+        unit,
+        unitPrice,
+        lineCost,
+    };
+}
+
+function renderOutboundFifoSuborderRows(outboundId, material) {
+    const tbody = document.getElementById('outbound-suborder-list');
+    if (!tbody) return;
+
+    const subs = AppState.outboundSuborders
+        .filter((s) => s.outboundOrderId === outboundId)
+        .slice()
+        .sort((a, b) => {
+            const la = a.lineNo || 0;
+            const lb = b.lineNo || 0;
+            if (la !== lb) return la - lb;
+            return (a.id || 0) - (b.id || 0);
+        });
+
+    tbody.innerHTML = '';
+    if (!subs.length) {
+        tbody.innerHTML =
+            '<tr><td colspan="8" style="text-align:center;color:#888;">暂无 FIFO 子单数据</td></tr>';
+        return;
     }
-    document.getElementById('outbound-detail-status').textContent = statusText;
-    
-    // 填充子单列表
-    const suborderList = document.getElementById('outbound-suborder-list');
-    suborderList.innerHTML = '';
-    
-    const suborders = AppState.outboundSuborders.filter(s => s.outboundOrderId === id);
-    suborders.forEach(suborder => {
-        const inboundOrder = AppState.inboundOrders.find(o => o.id === suborder.inboundOrderId);
-        if (!inboundOrder) return;
-        
+
+    let sumPre = 0;
+    let sumAct = 0;
+    let sumCost = 0;
+    const unit = material?.unit || '吨';
+
+    subs.forEach((sub, idx) => {
+        const d = resolveFifoLineDisplay(sub, material);
+        sumPre += d.preW;
+        sumAct += d.actW;
+        if (d.lineCost != null) sumCost += d.lineCost;
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${inboundOrder.orderNo}</td>
-            <td>${suborder.preWeight} ${material?.unit || '吨'}</td>
-            <td>${suborder.actualWeight} ${material?.unit || '吨'}</td>
-            <td>${formatCurrency(inboundOrder.unitPrice)}/${material?.unit || '吨'}</td>
-            <td>
-                ${suborder.status === 'pre_outbound' ? '预出库' : 
-                  suborder.status === 'actual_outbound' ? '出库中' : '已完成'}
-            </td>
+            <td>${d.lineNo || idx + 1}</td>
+            <td>${escapeHtml(d.subOrderNo)}</td>
+            <td>${escapeHtml(d.orderNo)}</td>
+            <td>${escapeHtml(d.inboundTime)}</td>
+            <td>${d.preW.toFixed(2)} ${unit}</td>
+            <td>${d.actW.toFixed(2)} ${unit}</td>
+            <td>${
+                d.unitPrice != null
+                    ? `${formatCurrency(d.unitPrice)}/${unit}`
+                    : '<span style="color:#888;">-</span>'
+            }</td>
+            <td>${
+                d.lineCost != null ? formatCurrency(d.lineCost) : '<span style="color:#888;">-</span>'
+            }</td>
         `;
-        suborderList.appendChild(row);
+        tbody.appendChild(row);
     });
-    
-    // 显示模态框
+
+    const foot = document.createElement('tr');
+    foot.className = 'fifo-total-row';
+    foot.innerHTML = `
+        <td colspan="4" style="text-align:right;font-weight:600;">合计</td>
+        <td style="font-weight:600;">${sumPre.toFixed(2)} ${unit}</td>
+        <td style="font-weight:600;">${sumAct.toFixed(2)} ${unit}</td>
+        <td></td>
+        <td style="font-weight:600;">${sumCost > 0 ? formatCurrency(sumCost) : '-'}</td>
+    `;
+    tbody.appendChild(foot);
+}
+
+function fillOutboundDetailHeader(order, material, warehouse) {
+    document.getElementById('outbound-detail-order-no').textContent = order.orderNo;
+    document.getElementById('outbound-detail-material').textContent = material
+        ? `${material.code} - ${material.name}`
+        : '-';
+    document.getElementById('outbound-detail-warehouse').textContent = warehouse
+        ? `${warehouse.code} - ${warehouse.name}`
+        : '-';
+    document.getElementById('outbound-detail-pre-weight').textContent = `${order.preWeight} ${
+        material?.unit || '吨'
+    }`;
+    document.getElementById('outbound-detail-actual-weight').textContent = `${order.actualWeight} ${
+        material?.unit || '吨'
+    }`;
+    document.getElementById('outbound-detail-price').textContent = formatCurrency(order.price);
+    document.getElementById('outbound-detail-total-price').textContent = formatCurrency(
+        order.actualWeight * order.price
+    );
+    document.getElementById('outbound-detail-date').textContent = formatOutboundTimeDisplay(order.date);
+    document.getElementById('outbound-detail-status').textContent = outboundOrderStatusLabel(order);
+    renderOutboundWeighingSlip(order);
+}
+
+function renderOutboundWeighingSlip(order) {
+    const section = document.getElementById('outbound-detail-weighing-section');
+    const empty = document.getElementById('outbound-detail-weighing-empty');
+    const img = document.getElementById('outbound-detail-weighing-img');
+    const nameEl = document.getElementById('outbound-detail-weighing-name');
+    const src = order?.weighingSlipImage && String(order.weighingSlipImage).trim();
+    if (src && section && img) {
+        section.style.display = 'block';
+        if (empty) empty.style.display = 'none';
+        img.src = src;
+        img.alt = order.weighingSlipName || '磅单';
+        img.className = 'image-previewable';
+        if (nameEl) {
+            nameEl.textContent = `文件：${order.weighingSlipName || '磅单'}（点击可放大）`;
+        }
+    } else {
+        if (section) section.style.display = 'none';
+        if (empty) empty.style.display = 'block';
+        if (img) img.removeAttribute('src');
+        if (nameEl) nameEl.textContent = '';
+    }
+}
+
+// 查看出库详情（含 FIFO 子行）
+function viewOutboundDetails(id) {
+    const order = AppState.outboundOrders.find((o) => o.id === id);
+    if (!order) return;
+
+    const material = AppState.materials.find((m) => m.id === order.materialId);
+    const warehouse = AppState.warehouses.find((w) => w.id === order.warehouseId);
+
+    fillOutboundDetailHeader(order, material, warehouse);
+    renderOutboundFifoSuborderRows(id, material);
     openModal('outbound-detail-modal');
+
+    if (!useApiMode() || !window.InventoryApi?.fetchOutboundDetail) return;
+
+    void (async function () {
+        try {
+            const det = await window.InventoryApi.fetchOutboundDetail(id);
+            const photo = det.weighbridgePhoto || det.weighbridge_photo || '';
+            const orderIdx = AppState.outboundOrders.findIndex((o) => o.id === id);
+            if (orderIdx !== -1 && photo) {
+                AppState.outboundOrders[orderIdx].weighingSlipImage = photo;
+            }
+            const freshSubs = window.InventoryApi.fifoLinesToSuborders(id, det.fifoLines || []);
+            AppState.outboundSuborders = AppState.outboundSuborders.filter(
+                (s) => s.outboundOrderId !== id
+            ).concat(freshSubs);
+            renderOutboundFifoSuborderRows(id, material);
+            renderOutboundWeighingSlip(AppState.outboundOrders.find((o) => o.id === id));
+        } catch (e) {
+            const tbody = document.getElementById('outbound-suborder-list');
+            if (tbody && !tbody.querySelector('tr')) {
+                tbody.innerHTML =
+                    '<tr><td colspan="8" style="text-align:center;color:#c00;">' +
+                    escapeHtml(e.message || '加载 FIFO 明细失败') +
+                    '</td></tr>';
+            }
+        }
+    })();
 }
 
 // 执行出库（从预出库转为实际出库）
@@ -3811,6 +4146,7 @@ function cancelOutbound(id) {
                 await window.InventoryApi.deleteOutbound(id);
                 await window.InventoryApi.refreshAppStateFromServer(AppState);
                 loadOutboundTab('pre-outbound');
+                loadOutboundTab('actual-outbound');
                 updateDashboardStats();
                 showMessage('已取消出库计划', 'success');
             } catch (e) {
@@ -3856,14 +4192,7 @@ function cancelOutbound(id) {
 }
 
 function inboundStatusLabelForReport(status) {
-    const map = {
-        pending: '待审核',
-        approved: '已审核待出库',
-        outbounding: '出库中',
-        partial: '部分已出库',
-        completed: '全部已出库'
-    };
-    return map[status] || status || '-';
+    return inboundStatusDetailText(status);
 }
 
 // 加载库存预警页面
@@ -3907,6 +4236,10 @@ function updateWarningList() {
                     const rem = Number(
                         it.remainingWeightByBasis != null ? it.remainingWeightByBasis : 0
                     );
+                    const deductTon =
+                        basis === 'actual'
+                            ? Number(it.actualOutboundWeight || 0)
+                            : Number(it.combinedOutboundDeductionWeight || 0);
                     const isWarning = rem < threshold;
                     const row = document.createElement('tr');
                     row.className = isWarning ? 'warning-row' : '';
@@ -3916,7 +4249,7 @@ function updateWarningList() {
             <td>${Number(it.totalApprovedInboundWeight || 0).toFixed(2)} 吨</td>
             <td>${Number(it.waitingNotActuallyOutboundWeight || 0).toFixed(2)} 吨</td>
             <td>${Number(it.plannedOutboundWeight || 0).toFixed(2)} 吨</td>
-            <td>${Number(it.combinedOutboundDeductionWeight || 0).toFixed(2)} 吨</td>
+            <td>${deductTon.toFixed(2)} 吨</td>
             <td>${rem.toFixed(2)} 吨</td>
             <td>
                 ${isWarning
@@ -3968,7 +4301,12 @@ function updateWarningList() {
         const warehouse = AppState.warehouses.find((w) => w.id === inventory.warehouseId);
         if (!material || !warehouse) return;
         
-        const deductionWeight = inventory.totalInbound - inventory.totalAvailable;
+        const deductionWeight =
+            deductionMode === 'both'
+                ? inventory.totalInbound - inventory.totalAvailable
+                : inventory.totalInbound -
+                  inventory.pendingOutbound -
+                  inventory.totalPreOutbound;
         const isWarning = inventory.totalAvailable < threshold;
         
         const row = document.createElement('tr');
@@ -4090,7 +4428,6 @@ function loadInventoryReport() {
 
     if (useApiMode()) {
         const statusMap = {
-            pending: 'pending_audit',
             approved: 'pending_outbound',
             outbounding: 'outbounding',
             partial: 'partial_outbound',
@@ -4142,7 +4479,7 @@ function loadInventoryReport() {
     const inboundFiltered = AppState.inboundOrders.filter((order) => {
         if (wf && String(order.warehouseId) !== wf) return false;
         if (mf && String(order.materialId) !== mf) return false;
-        if (sf && order.status !== sf) return false;
+        if (sf && normalizeInboundFlowStatus(order.status) !== sf) return false;
         return true;
     });
     
@@ -4337,19 +4674,7 @@ function generateProfitReport() {
             }
             profitByMaterial[materialId].salesWeight += actualW;
             profitByMaterial[materialId].salesRevenue += actualW * price;
-
-            let remainingWeight = actualW;
-            const suborders = AppState.outboundSuborders.filter((s) => s.outboundOrderId === order.id);
-
-            for (const suborder of suborders) {
-                if (remainingWeight <= 0) break;
-                const inboundOrder = AppState.inboundOrders.find((io) => io.id === suborder.inboundOrderId);
-                if (!inboundOrder) continue;
-                const subAct = Number(suborder.actualWeight) || 0;
-                const allocateWeight = Math.min(subAct, remainingWeight);
-                profitByMaterial[materialId].cost += allocateWeight * (Number(inboundOrder.unitPrice) || 0);
-                remainingWeight -= allocateWeight;
-            }
+            profitByMaterial[materialId].cost += allocateOutboundOrderCost(order);
             profitByMaterial[materialId].profit =
                 profitByMaterial[materialId].salesRevenue - profitByMaterial[materialId].cost;
         });
@@ -4364,12 +4689,15 @@ function generateProfitReport() {
 
             const profitMargin =
                 profit.salesRevenue > 0 ? ((profit.profit / profit.salesRevenue) * 100).toFixed(2) : '0.00';
+            const avgSalePrice =
+                profit.salesWeight > 0 ? profit.salesRevenue / profit.salesWeight : 0;
 
             const row = document.createElement('tr');
             row.innerHTML = `
             <td>${material.code}</td>
             <td>${material.name}</td>
             <td>${profit.salesWeight.toFixed(2)} ${material.unit}</td>
+            <td>${formatCurrency(avgSalePrice)}/${material.unit}</td>
             <td>${formatCurrency(profit.salesRevenue)}</td>
             <td>${formatCurrency(profit.cost)}</td>
             <td>${formatCurrency(profit.profit)}</td>
@@ -4407,7 +4735,7 @@ function exportReportToExcel() {
         return;
     }
     
-    let csv = '品种代码,品种名称,销售重量(吨),销售收入(元),销售成本(元),销售利润(元),利润率(%)\n';
+    let csv = '品种代码,品种名称,销售重量(吨),销售均价(元/吨),销售收入(元),销售成本(元),销售利润(元),利润率(%)\n';
     
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach(row => {
