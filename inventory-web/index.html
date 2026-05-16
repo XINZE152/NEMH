@@ -134,8 +134,8 @@
                             <i class="fas fa-inbox"></i>
                         </div>
                         <div class="stat-content">
-                            <h3>待审核入库</h3>
-                            <p id="pending-review-count">0</p>
+                            <h3>本月入库</h3>
+                            <p id="month-inbound-count">0</p>
                             <span>单</span>
                         </div>
                     </div>
@@ -223,8 +223,10 @@
                         <i class="fas fa-plus"></i> 新增定价
                     </button>
                     <div class="search-box">
-                        <input type="text" id="pricing-search" placeholder="搜索品种...">
-                        <i class="fas fa-search"></i>
+                        <input type="text" id="pricing-search" placeholder="搜索定价编号、品种代码或名称...">
+                        <button type="button" class="search-box-btn" id="pricing-search-btn" title="搜索" aria-label="搜索">
+                            <i class="fas fa-search"></i>
+                        </button>
                     </div>
                 </div>
                 
@@ -250,7 +252,7 @@
             <div id="inbound-page" class="content-page">
                 <div class="page-header">
                     <h1><i class="fas fa-inbox"></i> 收货入库管理</h1>
-                    <p>货物到达库房后，创建入库单记录实物信息</p>
+                    <p>货物到达库房后创建入库单，保存后自动入库通过，可直接参与出库</p>
                 </div>
                 
                 <div class="page-actions">
@@ -260,9 +262,7 @@
                     <div class="filter-group">
                         <select id="inbound-status-filter">
                             <option value="">全部状态</option>
-                            <option value="pending">待审核</option>
-                            <option value="approved">已审核待出库</option>
-                            <option value="rejected">已驳回</option>
+                            <option value="approved">待出库</option>
                             <option value="outbounding">出库中</option>
                             <option value="partial">部分已出库</option>
                             <option value="completed">全部已出库</option>
@@ -414,7 +414,6 @@
                                         <th>实际出库重量</th>
                                         <th>出库价格</th>
                                         <th>状态</th>
-                                        <th>磅单</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
@@ -431,12 +430,15 @@
                                 <thead>
                                     <tr>
                                         <th>出库单号</th>
+                                        <th>出库库房</th>
                                         <th>品种</th>
+                                        <th>入库单号</th>
                                         <th>实际出库重量</th>
                                         <th>出库价格</th>
                                         <th>成本单价</th>
                                         <th>预估毛利</th>
                                         <th>出库时间</th>
+                                        <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="outbound-history-list">
@@ -471,8 +473,8 @@
                             <div class="deduction-mode">
                                 <label>扣减逻辑：</label>
                                 <select id="deduction-mode">
-                                    <option value="both">按（实际出库+预出库）计算</option>
-                                    <option value="actual">仅按实际出库计算</option>
+                                    <option value="both">可用库存：总入库 − 实际出库与预出库占用（combined）</option>
+                                    <option value="actual">可用库存：总入库 − 仅已实际出库（actual）</option>
                                 </select>
                             </div>
                         </div>
@@ -508,8 +510,7 @@
                             </select>
                             <select id="report-status-filter">
                                 <option value="">全部状态</option>
-                                <option value="pending">待审核</option>
-                                <option value="approved">已审核待出库</option>
+                                <option value="approved">待出库</option>
                                 <option value="outbounding">出库中</option>
                                 <option value="partial">部分已出库</option>
                                 <option value="completed">全部已出库</option>
@@ -575,6 +576,7 @@
                                 <th>品种代码</th>
                                 <th>品种名称</th>
                                 <th>销售重量（吨）</th>
+                                <th>销售均价（元/吨）</th>
                                 <th>销售收入（元）</th>
                                 <th>销售成本（元）</th>
                                 <th>销售利润（元）</th>
@@ -859,14 +861,6 @@
                                 <span id="view-status">-</span>
                             </div>
                             <div class="detail-item">
-                                <label>审核人：</label>
-                                <span id="view-reviewer">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>审核日期：</label>
-                                <span id="view-review-date">-</span>
-                            </div>
-                            <div class="detail-item">
                                 <label>实际出库重量：</label>
                                 <span id="view-actual-outbound">-</span>
                             </div>
@@ -1004,6 +998,7 @@
                             <label for="outbound-sale-price">出库单价（元/吨）</label>
                             <input type="number" id="outbound-sale-price" min="0" step="1" placeholder="选择报价后自动带出，可直接修改">
                         </div>
+                        <p id="outbound-available-hint" class="form-hint" style="display: none; margin-top: 4px;"></p>
                     </div>
                     <div class="modal-footer">
                         <button class="btn-secondary" onclick="closeModal('add-outbound-modal')">取消</button>
@@ -1058,17 +1053,32 @@
                                 <span id="outbound-detail-status">-</span>
                             </div>
                         </div>
+
+                        <div id="outbound-detail-weighing-section" class="outbound-detail-weighing" style="display: none; margin-top: 20px;">
+                            <h4><i class="fas fa-image"></i> 磅单</h4>
+                            <p id="outbound-detail-weighing-name" style="margin: 0 0 10px; color: #666; font-size: 14px;"></p>
+                            <div class="view-multi-img-wrap">
+                                <img id="outbound-detail-weighing-img" class="image-previewable" alt="磅单" />
+                            </div>
+                        </div>
+                        <p id="outbound-detail-weighing-empty" style="display: none; margin-top: 16px; color: #888; font-size: 14px;">暂无磅单图片</p>
                         
-                        <h4>出库子单</h4>
+                        <h4>FIFO 分配明细</h4>
+                        <p id="outbound-fifo-hint" class="form-hint" style="margin: 0 0 10px;">
+                            按所选库房与品种，依入库时间先进先出扣减；下列各行对应该出库单的 FIFO 子单。
+                        </p>
                         <div class="data-table-container">
                             <table class="data-table">
                                 <thead>
                                     <tr>
+                                        <th>序号</th>
+                                        <th>子单号</th>
                                         <th>入库单号</th>
+                                        <th>入库时间</th>
                                         <th>预出库重量</th>
                                         <th>实际出库重量</th>
                                         <th>成本单价</th>
-                                        <th>状态</th>
+                                        <th>行成本</th>
                                     </tr>
                                 </thead>
                                 <tbody id="outbound-suborder-list">
@@ -1245,6 +1255,23 @@
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" onclick="closeModal('weighing-slip-view-modal')">关闭</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 通用图片预览（点击放大） -->
+    <div id="image-lightbox" class="image-lightbox" hidden aria-hidden="true">
+        <div class="image-lightbox-backdrop" onclick="closeImageLightbox()"></div>
+        <div class="image-lightbox-panel" role="dialog" aria-modal="true" aria-label="图片预览">
+            <div class="image-lightbox-toolbar">
+                <button type="button" class="btn-secondary btn-small" onclick="imageLightboxZoom(-0.25)" title="缩小">−</button>
+                <button type="button" class="btn-secondary btn-small" onclick="imageLightboxZoom(0.25)" title="放大">+</button>
+                <button type="button" class="btn-secondary btn-small" onclick="imageLightboxResetZoom()" title="重置">1:1</button>
+                <button type="button" class="btn-secondary btn-small" onclick="closeImageLightbox()" title="关闭">关闭</button>
+            </div>
+            <div class="image-lightbox-stage">
+                <img id="image-lightbox-img" src="" alt="图片预览" />
+            </div>
+            <p id="image-lightbox-caption" class="image-lightbox-caption"></p>
         </div>
     </div>
 
