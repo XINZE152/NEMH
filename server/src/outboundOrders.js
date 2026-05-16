@@ -2,6 +2,12 @@ import { run, all, get } from './db.js';
 import { requireWarehouseRole } from './auth.js';
 import { parseWeighbridgeText } from './weighbridgeParse.js';
 import { createLogger, apiError } from './logger.js';
+import {
+  getFifoInboundAvailability,
+  roundMoney,
+  roundTon,
+  sumFifoAvailableWeight,
+} from './inventoryStock.js';
 
 const log = createLogger('nemh.outboundOrders');
 
@@ -9,14 +15,6 @@ function parsePositiveNumber(v) {
   const n = typeof v === 'string' ? parseFloat(v.trim()) : Number(v);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n;
-}
-
-function roundTon(n) {
-  return Number((Number(n) || 0).toFixed(2));
-}
-
-function roundMoney(n) {
-  return Number((Number(n) || 0).toFixed(2));
 }
 
 function generateOutboundOrderNo() {
@@ -62,41 +60,6 @@ async function getDefaultOutboundUnitPrice(db, materialId) {
   );
   if (latest?.p != null && latest.p !== undefined) return roundMoney(latest.p);
   return null;
-}
-
-/**
- * 已审核入库单按先进先出，计算每条可再分配重量（扣减其他出库单已占用：已完成用实际，待完成用预分配）。
- */
-async function getFifoInboundAvailability(db, warehouseId, materialId) {
-  return all(
-    db,
-    `SELECT t.id AS inboundOrderId,
-            t.order_no AS inboundOrderNo,
-            t.weight AS inboundWeight,
-            t.inbound_at AS inboundAt,
-            t.available AS availableWeight
-     FROM (
-       SELECT io.id, io.order_no, io.weight, io.inbound_at,
-         (io.weight - COALESCE((
-           SELECT SUM(
-             CASE WHEN o.status = 'completed'
-               THEN COALESCE(l.actual_weight, l.planned_weight)
-               ELSE l.planned_weight
-             END
-           )
-           FROM outbound_fifo_lines l
-           JOIN outbound_orders o ON o.id = l.outbound_order_id
-           WHERE l.inbound_order_id = io.id
-         ), 0)) AS available
-       FROM inbound_orders io
-       WHERE io.warehouse_id = ?
-         AND io.material_id = ?
-         AND io.audit_status = 'approved'
-     ) t
-     WHERE t.available > 0.0001
-     ORDER BY datetime(t.inbound_at) ASC, t.id ASC`,
-    [warehouseId, materialId]
-  );
 }
 
 function buildFifoAllocations(rows, plannedTotal) {
@@ -192,11 +155,20 @@ function mapOutboundRow(row) {
   if (!row) return null;
   const completed = row.status === 'completed';
   const outboundTime = completed ? row.updatedAt : null;
+  const actualWeight = roundTon(row.actualWeight);
+  const unitPrice = roundMoney(row.unitPrice);
+  const plannedWeight = roundTon(row.plannedWeight);
   return {
     ...row,
+    plannedWeight,
+    actualWeight,
+    unitPrice,
     /** 业务出库完成时间（与 updatedAt 一致，ISO8601 含时分秒） */
     completedAt: outboundTime,
     outboundTime,
+    /** 已完成单：实际重量×出库单价；待完成为 null */
+    salesRevenue: completed ? roundMoney(actualWeight * unitPrice) : null,
+    fifoLines: row.fifoLines || undefined,
   };
 }
 
@@ -474,9 +446,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
       );
       const fifo = buildFifoAllocations(fifoRows, plannedWeight);
       if (!fifo.ok) {
-        const totalAvailable = roundTon(
-          fifoRows.reduce((s, r) => s + Number(r.availableWeight || 0), 0)
-        );
+        const totalAvailable = sumFifoAvailableWeight(fifoRows);
         const approvedCountRow = await get(
           db,
           `SELECT COUNT(*) AS c FROM inbound_orders
@@ -680,6 +650,7 @@ export function registerOutboundOrderRoutes(app, db, authMiddleware) {
   );
 }
 
+/** 汇总缓存；入库汇总预警改从 outbound_orders 实时汇总，与此表对账应一致 */
 async function bumpWarehouseMaterialPlanned(db, warehouseId, materialId, delta) {
   const d = roundTon(delta);
   if (Math.abs(d) < 0.0001) return;
