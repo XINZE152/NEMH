@@ -111,7 +111,7 @@
       const user = {
         id: apiUser.id,
         username: apiUser.username,
-        name: '系统管理员',
+        name: apiUser.username,
         roleId: 1,
         warehouseId: null,
         apiRole: 'statistics',

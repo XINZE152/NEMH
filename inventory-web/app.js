@@ -55,6 +55,15 @@ function isSystemAdministrator() {
     return AppState.currentRole.permissions.includes('all');
 }
 
+/** 下拉菜单仅保留「退出登录」，清除缓存或旧版注入的多余项 */
+function ensureUserInfoMenuOnlyLogout() {
+    const menu = document.getElementById('user-info-menu');
+    if (!menu) return;
+    Array.from(menu.children).forEach((child) => {
+        if (child.id !== 'logout-btn') child.remove();
+    });
+}
+
 function closeUserInfoMenu() {
     const wrap = document.getElementById('header-user-info');
     const menu = document.getElementById('user-info-menu');
@@ -73,6 +82,7 @@ function toggleUserInfoMenu() {
     const open = wrap.classList.toggle('open');
     menu.hidden = !open;
     trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) ensureUserInfoMenuOnlyLogout();
 }
 
 function updateHeaderUserInfo() {
@@ -623,6 +633,7 @@ function setupEventListeners() {
     }
 
     initUsersManagementEvents();
+    ensureUserInfoMenuOnlyLogout();
 
     const userInfoTrigger = document.getElementById('user-info-trigger');
     if (userInfoTrigger) {
