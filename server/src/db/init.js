@@ -26,7 +26,7 @@ async function initDatabase() {
       },
       {
         name: '财务部管理员',
-        description: '负责实物出入库操作',
+        description: '负责收货定价、入库与出库等操作',
         permissions: [
           'purchase-price:create',
           'inbound:create',

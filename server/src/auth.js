@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { get } from './db.js';
-import { createLogger } from './logger.js';
+import { createLogger, apiError } from './logger.js';
+import { enrichUserWithRoleLabel, getRoleDisplayName } from './roleLabels.js';
 
 const log = createLogger('nemh.auth');
 
@@ -17,7 +18,7 @@ export function normalizeUserRole(role) {
 
 export function logAuthHint() {
   console.log(
-    '[auth] 空库自动创建 admin / admin123（statistics）：内置超级管理员，拥有统计部与库房全部 API 权限。其他 statistics 用户仅统计部接口；库房 role=warehouse：收货定价、入库、出库。自助注册：POST /api/register。JWT_SECRET 可覆盖密钥。'
+    '[auth] 空库自动创建 admin / admin123（statistics）：内置超级管理员，拥有统计部与财务部全部 API 权限。其他 statistics 用户仅统计部接口；role=warehouse（财务部管理员）：收货定价、入库、出库。入库已自动审核。自助注册：POST /api/register。宝驰库房：BAOCHI_WAREHOUSE_API_URL。JWT_SECRET 可覆盖密钥。'
   );
 }
 
@@ -55,16 +56,25 @@ export async function tryLogin(db, username, password) {
   return {
     ok: true,
     token: createAdminToken(row.id, row.username, role),
-    user: { id: row.id, username: row.username, role },
+    user: enrichUserWithRoleLabel({
+      id: row.id,
+      username: row.username,
+      role,
+    }),
   };
 }
+
+export { getRoleDisplayName };
 
 /** 鉴权：校验 Token 并从数据库加载当前用户角色（与 JWT 解耦，改角色后重新请求即可生效）。 */
 export function createAuthMiddleware(db) {
   return function authMiddleware(req, res, next) {
     const raw = req.headers.authorization;
     if (!raw || !raw.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '未登录或缺少 Token' });
+      return apiError(req, res, 401, {
+        error: '未登录或缺少 Token',
+        code: 'MISSING_TOKEN',
+      });
     }
     const token = raw.slice(7);
     let userId;
@@ -72,17 +82,31 @@ export function createAuthMiddleware(db) {
       const payload = jwt.verify(token, JWT_SECRET);
       userId = Number(payload.sub);
       if (!Number.isInteger(userId) || userId < 1) {
-        return res.status(401).json({ error: '登录已失效，请重新登录' });
+        return apiError(req, res, 401, {
+          error: '登录已失效，请重新登录',
+          code: 'INVALID_TOKEN_SUB',
+        });
       }
-    } catch {
-      return res.status(401).json({ error: '登录已失效，请重新登录' });
+    } catch (e) {
+      return apiError(
+        req,
+        res,
+        401,
+        { error: '登录已失效，请重新登录', code: 'INVALID_TOKEN' },
+        { jwtError: e?.message || String(e) }
+      );
     }
 
     get(db, 'SELECT id, username, role FROM users WHERE id = ?', [userId])
       .then((row) => {
         if (!row) {
-          log.warn(`JWT 有效但用户不存在或已删除: userId=${userId}`);
-          return res.status(401).json({ error: '用户不存在或已删除' });
+          return apiError(
+            req,
+            res,
+            401,
+            { error: '用户不存在或已删除', code: 'USER_NOT_FOUND' },
+            { userId }
+          );
         }
         req.admin = {
           id: row.id,
@@ -98,7 +122,13 @@ export function createAuthMiddleware(db) {
       })
       .catch((e) => {
         log.error(`鉴权查询用户失败: ${e?.message || e}`);
-        res.status(500).json({ error: '鉴权失败' });
+        apiError(
+          req,
+          res,
+          500,
+          { error: '鉴权失败', code: 'AUTH_DB_ERROR' },
+          { message: e?.message || String(e) }
+        );
       });
   };
 }
@@ -108,7 +138,13 @@ export function requireStatisticsRole(req, res, next) {
   if (isBuiltInSuperAdmin(req) || req.admin?.role === 'statistics') {
     return next();
   }
-  return res.status(403).json({ error: '仅统计部可操作' });
+  return apiError(
+    req,
+    res,
+    403,
+    { error: '仅统计部可操作', code: 'STATISTICS_ROLE_REQUIRED' },
+    { role: req.admin?.role, username: req.admin?.username }
+  );
 }
 
 /** 仅库房：收货定价、入库录入、出库等（admin 超级管理员亦放行） */
@@ -116,7 +152,13 @@ export function requireWarehouseRole(req, res, next) {
   if (isBuiltInSuperAdmin(req) || req.admin?.role === 'warehouse') {
     return next();
   }
-  return res.status(403).json({ error: '仅库房可操作' });
+  return apiError(
+    req,
+    res,
+    403,
+    { error: '仅财务部管理员可操作', code: 'WAREHOUSE_ROLE_REQUIRED' },
+    { role: req.admin?.role, username: req.admin?.username }
+  );
 }
 
 /** 仅统计部：发布对外统一市场报价（语义别名，与 requireStatisticsRole 一致） */

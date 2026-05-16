@@ -173,6 +173,19 @@ export async function initDb() {
       `UPDATE warehouses SET updated_at = datetime('now') WHERE updated_at IS NULL`
     );
   }
+  const whCols2 = await all(db, 'PRAGMA table_info(warehouses)');
+  if (!whCols2.some((c) => c.name === 'external_source')) {
+    await run(db, 'ALTER TABLE warehouses ADD COLUMN external_source TEXT');
+  }
+  if (!whCols2.some((c) => c.name === 'external_id')) {
+    await run(db, 'ALTER TABLE warehouses ADD COLUMN external_id TEXT');
+  }
+  await run(
+    db,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouses_external
+     ON warehouses(external_source, external_id)
+     WHERE external_source IS NOT NULL AND external_id IS NOT NULL`
+  );
   const whCountRow = await get(db, 'SELECT COUNT(*) AS c FROM warehouses');
   if (Number(whCountRow?.c ?? 0) === 0) {
     await run(db, `INSERT INTO warehouses (code, name) VALUES ('DEF-001', '默认库房')`);
@@ -309,6 +322,23 @@ export async function initDb() {
         [code, name, description]
       );
     }
+  }
+
+  /** 入库改为自动审核：历史待审核单一次性通过，便于 FIFO 出库 */
+  const pendingInbound = await get(
+    db,
+    `SELECT COUNT(*) AS c FROM inbound_orders WHERE audit_status = 'pending'`
+  );
+  if (Number(pendingInbound?.c ?? 0) > 0) {
+    const mig = await run(
+      db,
+      `UPDATE inbound_orders SET
+         audit_status = 'approved',
+         reviewed_at = COALESCE(reviewed_at, datetime('now')),
+         updated_at = datetime('now')
+       WHERE audit_status = 'pending'`
+    );
+    log.info(`已将 ${mig.changes} 条待审核入库单自动置为已审核`);
   }
 
   log.info(`SQLite 已就绪: ${dbPath}`);

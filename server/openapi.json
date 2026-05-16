@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "新能源材料进销存 API",
-    "description": "进销存后端接口：用户与库房、收货定价、对外报价、入库审核、出库与 FIFO、库存报表与预警等。默认账号见服务启动日志。详细说明见仓库内 `server/API接口文档.md`。\n\n**鉴权**：除「健康检查」「登录」「自助注册」外，请求头需 `Authorization: Bearer <JWT>`。角色 `statistics`（统计部）与 `warehouse`（库房）权限不同，见各接口说明。\n\n**Swagger**：展开接口后可用 **Try it out** 调试；**Curl** 区会按当前参数生成命令；**Example Value** 为示例请求/响应体。",
+    "description": "进销存后端接口：用户与库房（可宝驰同步）、收货定价、对外报价、入库自动审核、出库与 FIFO、库存报表与预警等。默认账号见服务启动日志。详细说明见 `server/API接口文档.md`。\n\n**鉴权**：除「健康检查」「登录」「自助注册」外，请求头需 `Authorization: Bearer <JWT>`。角色 `statistics`（统计部）与 `warehouse`（财务部管理员，展示名 roleDisplayName）权限不同。\n\n**环境变量**：`BAOCHI_WAREHOUSE_API_URL` 宝驰库房同步；`BAOCHI_ALLOW_LOCAL_WAREHOUSE_CRUD=1` 允许本地维护库房。",
     "version": "1.0.0"
   },
   "servers": [{ "url": "/", "description": "当前服务（与浏览器同源）" }],
@@ -1240,7 +1240,7 @@
             "content": {
               "application/json": {
                 "example": {
-                  "error": "可出库库存不足（先进先出），请减少预出库重量或先完成入库审核",
+                  "error": "可出库库存不足（先进先出），请减少预出库重量或先完成入库",
                   "shortfall": 2.5
                 }
               }

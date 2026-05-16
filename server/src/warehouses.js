@@ -1,5 +1,10 @@
 import { run, all, get } from './db.js';
 import { createLogger } from './logger.js';
+import {
+  isBaocheWarehouseCrudLocked,
+  isBaocheWarehouseSyncEnabled,
+  syncWarehousesFromBaoche,
+} from './baocheWarehouses.js';
 
 const log = createLogger('nemh.warehouses');
 
@@ -23,17 +28,64 @@ function mapWarehouseRow(row) {
     code: row.code,
     name: row.name,
     address: row.address ?? '',
+    externalSource: row.external_source ?? null,
+    externalId: row.external_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+function baocheCrudBlocked(res) {
+  if (!isBaocheWarehouseCrudLocked()) return false;
+  res.status(403).json({
+    error:
+      '已启用宝驰库房同步，本地不可增删改库房；请配置宝驰接口或设置 BAOCHI_ALLOW_LOCAL_WAREHOUSE_CRUD=1',
+    code: 'BAOCHI_WAREHOUSE_READONLY',
+  });
+  return true;
+}
+
 export function registerWarehouseRoutes(app, db, authMiddleware) {
+  app.post(
+    '/api/admin/warehouses/sync-from-baoche',
+    authMiddleware,
+    async (req, res) => {
+      try {
+        if (!isBaocheWarehouseSyncEnabled()) {
+          return res.status(400).json({
+            error: '未配置 BAOCHI_WAREHOUSE_API_URL，无法从宝驰同步库房',
+            code: 'BAOCHI_NOT_CONFIGURED',
+          });
+        }
+        const result = await syncWarehousesFromBaoche(db);
+        res.json(result);
+      } catch (e) {
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
+        res.status(502).json({
+          error: e?.message || '宝驰库房同步失败',
+          code: 'BAOCHI_SYNC_FAILED',
+        });
+      }
+    }
+  );
+
   app.get('/api/admin/warehouses', authMiddleware, async (req, res) => {
     try {
+      const shouldSync =
+        req.query.sync === '1' || req.query.sync === 'true';
+      if (shouldSync && isBaocheWarehouseSyncEnabled()) {
+        try {
+          await syncWarehousesFromBaoche(db);
+        } catch (e) {
+          log.warn(`列表拉取前宝驰同步失败: ${e?.message || e}`);
+        }
+      }
+
       const search = trimStr(req.query.search);
       let sql = `SELECT id, code, name,
           IFNULL(address, '') AS address,
+          external_source,
+          external_id,
           created_at AS created_at,
           updated_at AS updated_at
         FROM warehouses`;
@@ -62,6 +114,8 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
         db,
         `SELECT id, code, name,
             IFNULL(address, '') AS address,
+            external_source,
+            external_id,
             created_at AS created_at,
             updated_at AS updated_at
           FROM warehouses WHERE id = ?`,
@@ -77,6 +131,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
 
   app.post('/api/admin/warehouses', authMiddleware, async (req, res) => {
     try {
+      if (baocheCrudBlocked(res)) return;
       const body = req.body || {};
       const code = trimStr(body.code);
       const name = trimStr(body.name);
@@ -94,6 +149,8 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
         db,
         `SELECT id, code, name,
             IFNULL(address, '') AS address,
+            external_source,
+            external_id,
             created_at AS created_at,
             updated_at AS updated_at
           FROM warehouses WHERE id = ?`,
@@ -111,6 +168,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
 
   app.put('/api/admin/warehouses/:id', authMiddleware, async (req, res) => {
     try {
+      if (baocheCrudBlocked(res)) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
         return res.status(400).json({ error: '无效 id' });
@@ -172,6 +230,8 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
         db,
         `SELECT id, code, name,
             IFNULL(address, '') AS address,
+            external_source,
+            external_id,
             created_at AS created_at,
             updated_at AS updated_at
           FROM warehouses WHERE id = ?`,
@@ -189,6 +249,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
 
   app.delete('/api/admin/warehouses/:id', authMiddleware, async (req, res) => {
     try {
+      if (baocheCrudBlocked(res)) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
         return res.status(400).json({ error: '无效 id' });

@@ -7,9 +7,15 @@
  *   LOG_LEVEL   — debug | info | warn | error，默认 info
  *   LOG_HTTP    — 设为 0 关闭每条 HTTP 访问日志，默认开启
  *   LOG_AUTH    — 设为 1 时在 debug 级别下对鉴权成功打一条业务日志（默认关闭，避免与 HTTP 行重复）
- *   LOG_API_CLIENT_ERRORS — 设为 0 关闭 4xx 明细行（nemh.api），默认开启
+ *   LOG_API_CLIENT_ERRORS — 设为 0 关闭 4xx/5xx 业务明细行（nemh.api），默认开启
  *   LOG_API_REQUEST_BODY  — 设为 0 不在 4xx 明细中打印脱敏后的 requestBody，默认开启
+ *   LOG_API_QUERY         — 设为 0 不在明细中打印 query 参数，默认开启
  *   NEMH_EXPOSE_ERROR_DETAIL — 设为 1 时，500 类 JSON 响应附带 `detail`（异常 message）；非 production 时默认附带
+ *
+ * 检索示例（api.log）：
+ *   grep "nemh.api" logs/api.log
+ *   grep "FIFO_INSUFFICIENT" logs/api.log
+ *   grep "req=" logs/api.log
  */
 
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2, debug: 3 };
@@ -106,6 +112,32 @@ function shouldLogApiRequestBody() {
   return process.env.LOG_API_REQUEST_BODY !== '0';
 }
 
+function shouldLogApiQuery() {
+  return process.env.LOG_API_QUERY !== '0';
+}
+
+function formatRequestId(req) {
+  const id = req?.locals?.requestId ?? req?.res?.locals?.requestId;
+  return id ? `req=${id}` : '';
+}
+
+/** 为每条请求生成短 ID，便于在 nemh.http 与 nemh.api 行间关联 */
+export function requestIdMiddleware() {
+  return (req, res, next) => {
+    const incoming = req.headers['x-request-id'];
+    const id =
+      typeof incoming === 'string' && incoming.trim()
+        ? incoming.trim().slice(0, 64)
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    if (!req.locals) req.locals = {};
+    if (!res.locals) res.locals = {};
+    req.locals.requestId = id;
+    res.locals.requestId = id;
+    res.setHeader('X-Request-Id', id);
+    next();
+  };
+}
+
 /** 日志中省略超长或二进制类字段，避免 api.log 被 base64 撑爆 */
 export function sanitizeForApiLog(value, depth = 0) {
   if (depth > 6) return '[max-depth]';
@@ -148,6 +180,7 @@ export function formatRequestBodySummary(body) {
 /** 路由内在返回 4xx 前附加可检索的业务上下文（会写入 api.log） */
 export function setApiLogContext(res, context) {
   if (!res || !context) return;
+  if (!res.locals) res.locals = {};
   res.locals.nemhApiLogContext = {
     ...(res.locals.nemhApiLogContext || {}),
     ...context,
@@ -157,30 +190,66 @@ export function setApiLogContext(res, context) {
 /**
  * 记录 4xx/5xx 业务错误（与 HTTP 访问行配套，便于 grep「nemh.api」）
  */
+const API_ERROR_BODY_LOG_KEYS = [
+  'shortfall',
+  'availableWeight',
+  'plannedWeight',
+  'latestPurchaseUnitPrice',
+  'warehouseId',
+  'materialId',
+  'inboundOrderId',
+  'path',
+  'detail',
+];
+
 export function logApiClientError(req, statusCode, errorBody, extraContext) {
   if (!shouldLogApiClientErrors()) return;
   const body = errorBody && typeof errorBody === 'object' ? errorBody : { error: String(errorBody) };
+  const reqId = formatRequestId(req);
   const parts = [
+    reqId,
     `HTTP ${statusCode}`,
     `${req?.method || '?'}`,
-    req?.originalUrl || '?',
+    req?.originalUrl || req?.url || '?',
     formatRequestActor(req),
     `bizCode=${body.code || '-'}`,
     `error=${body.error || '-'}`,
-  ];
-  if (body.shortfall != null) parts.push(`shortfall=${body.shortfall}`);
-  if (body.availableWeight != null) parts.push(`availableWeight=${body.availableWeight}`);
-  if (body.latestPurchaseUnitPrice != null) {
-    parts.push(`latestPurchaseUnitPrice=${body.latestPurchaseUnitPrice}`);
+  ].filter(Boolean);
+  for (const key of API_ERROR_BODY_LOG_KEYS) {
+    if (body[key] != null && body[key] !== '') {
+      parts.push(`${key}=${body[key]}`);
+    }
   }
   const ctx = extraContext || {};
   if (Object.keys(ctx).length) {
     parts.push(`context=${JSON.stringify(sanitizeForApiLog(ctx))}`);
   }
+  if (
+    shouldLogApiQuery() &&
+    req?.query &&
+    typeof req.query === 'object' &&
+    Object.keys(req.query).length
+  ) {
+    parts.push(`query=${JSON.stringify(sanitizeForApiLog(req.query))}`);
+  }
   if (shouldLogApiRequestBody() && req?.body && Object.keys(req.body).length) {
     parts.push(`requestBody=${formatRequestBodySummary(req.body)}`);
   }
-  apiErrorLogger.warn(parts.join(' '));
+  const level = statusCode >= 500 ? 'error' : 'warn';
+  apiErrorLogger[level](parts.join(' '));
+}
+
+/**
+ * 统一返回 4xx/5xx JSON，并立即写入 nemh.api（不依赖 finish 钩子，便于与访问行对照）。
+ */
+export function apiError(req, res, statusCode, body, context) {
+  if (context) {
+    setApiLogContext(res, context);
+  }
+  res.locals.nemhApiErrorBody = body;
+  res.locals.nemhApiErrorLogged = true;
+  logApiClientError(req, statusCode, body, res.locals.nemhApiLogContext);
+  return res.status(statusCode).json(body);
 }
 
 /**
@@ -216,12 +285,22 @@ export function sendServerError(res, log, req, userFacingMessage, err, code = 'I
   const msg = e?.message || String(e);
   const stack = e?.stack || '';
   const who = req?.admin?.id != null ? `userId=${req.admin.id}` : 'userId=-';
+  const reqId = formatRequestId(req);
   log.error(
-    `HTTP 500 ${code} ${req?.method || '?'} ${req?.originalUrl || '?'} ${who} msg=${msg}${stack ? '\n' + stack : ''}`
+    `${reqId ? reqId + ' ' : ''}HTTP 500 ${code} ${req?.method || '?'} ${req?.originalUrl || '?'} ${who} msg=${msg}${stack ? '\n' + stack : ''}`
   );
   const body = { error: userFacingMessage, code };
   if (exposeErrorDetail()) body.detail = msg;
-  if (!res.headersSent) res.status(500).json(body);
+  if (!res.headersSent) {
+    res.locals.nemhApiErrorBody = body;
+    res.locals.nemhApiErrorLogged = true;
+    logApiClientError(req, 500, body, {
+      ...(res.locals.nemhApiLogContext || {}),
+      exceptionMessage: msg,
+      stackHead: stack.split('\n').slice(0, 4).join(' | '),
+    });
+    res.status(500).json(body);
+  }
 }
 
 export function httpAccessLogMiddleware() {
@@ -242,20 +321,31 @@ export function httpAccessLogMiddleware() {
       const len = res.getHeader('content-length');
       const lenStr = len == null ? '-' : String(len);
       const nginxT = formatNginxTime();
+      const reqId = formatRequestId(req);
       const reqLine = `${req.method} ${req.originalUrl} HTTP/${req.httpVersion || '1.1'}`;
+      const reqIdSuffix = reqId ? ` ${reqId}` : '';
       httpLogger.info(
-        `${ip} - - ${nginxT} "${q(reqLine)}" ${res.statusCode} ${lenStr} "${q(referer)}" "${q(ua)}" ${ms}ms`
+        `${ip} - - ${nginxT} "${q(reqLine)}" ${res.statusCode} ${lenStr} "${q(referer)}" "${q(ua)}" ${ms}ms${reqIdSuffix}`
       );
 
       const status = res.statusCode;
-      if (status >= 400 && shouldLogApiClientErrors()) {
+      if (status >= 400 && shouldLogApiClientErrors() && !res.locals.nemhApiErrorLogged) {
         const errBody = res.locals.nemhApiErrorBody;
         const ctx = res.locals.nemhApiLogContext;
         if (errBody) {
           logApiClientError(req, status, errBody, ctx);
         } else {
           apiErrorLogger.warn(
-            `HTTP ${status} ${req.method} ${req.originalUrl} ${formatRequestActor(req)} (响应无 JSON 错误体，可能为 204/纯文本)`
+            [
+              formatRequestId(req),
+              `HTTP ${status}`,
+              req.method,
+              req.originalUrl,
+              formatRequestActor(req),
+              '(响应无 JSON 错误体，可能为 204/纯文本或非 res.json 响应)',
+            ]
+              .filter(Boolean)
+              .join(' ')
           );
         }
       }

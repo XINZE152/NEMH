@@ -1,6 +1,6 @@
 import { run, all, get } from './db.js';
 import { requireStatisticsRole, requireWarehouseRole } from './auth.js';
-import { createLogger, setApiLogContext } from './logger.js';
+import { createLogger, apiError } from './logger.js';
 
 const log = createLogger('nemh.inboundOrders');
 
@@ -95,12 +95,38 @@ const INBOUND_ROW_SQL = `SELECT io.id,
  JOIN users uc ON uc.id = io.created_by
  LEFT JOIN users ur ON ur.id = io.reviewed_by`;
 
-/** 统计部审核入库：审核状态展示文案（数据库存储 pending / approved / rejected） */
+/** 入库审核状态展示（已关闭人工审核；新建单直接 approved） */
 function auditStatusText(status) {
-  if (status === 'approved') return '已审核待出库';
-  if (status === 'rejected') return '审核驳回';
+  if (status === 'approved') return '已入库';
+  if (status === 'rejected') return '已驳回';
   if (status === 'pending') return '待审核';
-  return String(status || '').trim() || '待审核';
+  return String(status || '').trim() || '已入库';
+}
+
+const INBOUND_AUDIT_DISABLED_MSG = '系统已关闭人工入库审核，新建入库单将自动通过';
+
+async function assertInboundEditable(db, existing, inboundOrderId) {
+  if (existing.audit_status === 'rejected') {
+    return { error: '已驳回的入库单不可修改', code: 'INBOUND_REJECTED' };
+  }
+  const linked = await get(
+    db,
+    'SELECT 1 AS x FROM outbound_fifo_lines WHERE inbound_order_id = ? LIMIT 1',
+    [inboundOrderId]
+  );
+  if (linked) {
+    return {
+      error: '已存在出库子单关联，不可修改',
+      code: 'INBOUND_LINKED_OUTBOUND',
+    };
+  }
+  if (
+    existing.audit_status !== 'approved' &&
+    existing.audit_status !== 'pending'
+  ) {
+    return { error: '当前状态不可修改', code: 'INBOUND_NOT_EDITABLE' };
+  }
+  return null;
 }
 
 function mapInboundRow(row) {
@@ -223,7 +249,7 @@ async function validateInboundPayload(db, body) {
   };
 }
 
-function respondInboundValidationError(res, validated) {
+function respondInboundValidationError(req, res, validated) {
   const payload = {
     error: validated.error,
     code: validated.code || 'VALIDATION_ERROR',
@@ -231,13 +257,12 @@ function respondInboundValidationError(res, validated) {
   if (validated.latestPurchaseUnitPrice != null) {
     payload.latestPurchaseUnitPrice = validated.latestPurchaseUnitPrice;
   }
-  setApiLogContext(res, {
+  return apiError(req, res, validated.status || 400, payload, {
     materialId: validated.materialId,
     warehouseId: validated.warehouseId,
     enteredUnitPrice: validated.enteredUnitPrice,
     latestPurchaseUnitPrice: validated.latestPurchaseUnitPrice,
   });
-  return res.status(validated.status || 400).json(payload);
 }
 
 export function registerInboundOrderRoutes(app, db, authMiddleware) {
@@ -333,7 +358,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       const body = req.body || {};
       const validated = await validateInboundPayload(db, body);
       if (validated.error) {
-        return respondInboundValidationError(res, validated);
+        return respondInboundValidationError(req, res, validated);
       }
 
       const {
@@ -375,9 +400,9 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         db,
         `INSERT INTO inbound_orders (
            order_no, warehouse_id, material_id, weight, unit_price, total_amount,
-           photo, inbound_at, audit_status,
+           photo, inbound_at, audit_status, reviewed_by, reviewed_at,
            created_by, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'))`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, datetime('now'), ?, datetime('now'))`,
         [
           orderNo,
           warehouseId,
@@ -387,6 +412,7 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
           totalAmount,
           photo,
           inboundAt,
+          req.admin.id,
           req.admin.id,
         ]
       );
@@ -416,34 +442,19 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
           id,
         ]);
         if (!existing) return res.status(404).json({ error: '入库单不存在' });
-        if (existing.audit_status !== 'pending') {
-          setApiLogContext(res, {
+        const editBlock = await assertInboundEditable(db, existing, id);
+        if (editBlock) {
+          return apiError(req, res, 400, editBlock, {
             inboundOrderId: id,
             orderNo: existing.order_no,
             auditStatus: existing.audit_status,
-          });
-          return res.status(400).json({
-            error: '仅待审核状态的入库单可修改',
-            code: 'INBOUND_NOT_PENDING',
-          });
-        }
-        const linked = await get(
-          db,
-          'SELECT 1 AS x FROM outbound_fifo_lines WHERE inbound_order_id = ? LIMIT 1',
-          [id]
-        );
-        if (linked) {
-          setApiLogContext(res, { inboundOrderId: id, orderNo: existing.order_no });
-          return res.status(400).json({
-            error: '已存在出库子单关联，不可修改',
-            code: 'INBOUND_LINKED_OUTBOUND',
           });
         }
 
         const body = req.body || {};
         const validated = await validateInboundPayload(db, body);
         if (validated.error) {
-          return respondInboundValidationError(res, validated);
+          return respondInboundValidationError(req, res, validated);
         }
 
         const photo =
@@ -499,11 +510,16 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         id,
       ]);
       if (!existing) return res.status(404).json({ error: '入库单不存在' });
+      if (existing.audit_status === 'approved') {
+        return res.json(await fetchInboundRow(db, id));
+      }
+      if (existing.audit_status === 'rejected') {
+        return res.status(400).json({ error: '已驳回的入库单不可再次审核' });
+      }
       if (existing.audit_status !== 'pending') {
-        return res.status(400).json({ error: '仅待审核状态的入库单可审核通过' });
+        return res.status(400).json({ error: '当前状态不可审核' });
       }
 
-      /** 审核通过后 audit_status 仍为 approved，对外展示为「已审核待出库」 */
       await run(
         db,
         `UPDATE inbound_orders SET
@@ -536,37 +552,10 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       }
       const existing = await get(db, 'SELECT * FROM inbound_orders WHERE id = ?', [id]);
       if (!existing) return res.status(404).json({ error: '入库单不存在' });
-      if (existing.audit_status !== 'pending') {
-        return res.status(400).json({ error: '仅待审核状态的入库单可驳回' });
-      }
-      const linked = await get(
-        db,
-        'SELECT 1 AS x FROM outbound_fifo_lines WHERE inbound_order_id = ? LIMIT 1',
-        [id]
-      );
-      if (linked) {
-        return res.status(400).json({ error: '已存在出库子单关联，不可驳回' });
-      }
-      const body = req.body || {};
-      let rejectReason = null;
-      const raw =
-        body.rejectReason ?? body.reject_reason ?? body.reason;
-      if (typeof raw === 'string') {
-        const s = raw.trim().slice(0, 500);
-        rejectReason = s || null;
-      }
-      await run(
-        db,
-        `UPDATE inbound_orders SET
-           audit_status = 'rejected',
-           reviewed_by = ?,
-           reviewed_at = datetime('now'),
-           reject_reason = ?,
-           updated_at = datetime('now')
-         WHERE id = ?`,
-        [req.admin.id, rejectReason, id]
-      );
-      res.json(await fetchInboundRow(db, id));
+      return res.status(400).json({
+        error: INBOUND_AUDIT_DISABLED_MSG,
+        code: 'INBOUND_AUDIT_DISABLED',
+      });
     } catch (e) {
       log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '驳回入库单失败' });
@@ -588,8 +577,8 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
           id,
         ]);
         if (!existing) return res.status(404).json({ error: '入库单不存在' });
-        if (existing.audit_status !== 'pending') {
-          return res.status(400).json({ error: '仅待审核状态的入库单可删除' });
+        if (existing.audit_status === 'rejected') {
+          return res.status(400).json({ error: '已驳回的入库单不可删除' });
         }
         const linked = await get(
           db,
@@ -598,6 +587,12 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         );
         if (linked) {
           return res.status(400).json({ error: '已存在出库子单关联，不可删除' });
+        }
+        if (
+          existing.audit_status !== 'approved' &&
+          existing.audit_status !== 'pending'
+        ) {
+          return res.status(400).json({ error: '当前状态不可删除' });
         }
         await run(db, 'DELETE FROM inbound_orders WHERE id = ?', [id]);
         res.status(204).send();

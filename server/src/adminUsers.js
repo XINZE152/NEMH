@@ -1,6 +1,7 @@
 import { run, all, get } from './db.js';
 import { hashPassword, USER_ROLES, requireStatisticsRole } from './auth.js';
 import { createLogger } from './logger.js';
+import { enrichUserWithRoleLabel } from './roleLabels.js';
 
 const log = createLogger('nemh.adminUsers');
 
@@ -26,7 +27,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
         db,
         'SELECT id, username, role, created_at, updated_at FROM users ORDER BY id ASC'
       );
-      res.json(rows);
+      res.json(rows.map(enrichUserWithRoleLabel));
     } catch (e) {
       log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
       res.status(500).json({ error: '查询用户失败' });
@@ -49,7 +50,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
       const role = parseUserRoleInput(roleRaw, 'warehouse');
       if (role === null) {
         return res.status(400).json({
-          error: `role 须为 ${USER_ROLES.join(' 或 ')}（库房默认 warehouse）`,
+          error: `role 须为 ${USER_ROLES.join(' 或 ')}（财务部默认 warehouse）`,
         });
       }
       const hash = hashPassword(password);
@@ -63,7 +64,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
         'SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?',
         [result.lastID]
       );
-      res.status(201).json(row);
+      res.status(201).json(enrichUserWithRoleLabel(row));
     } catch (e) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '用户名已存在' });
@@ -117,7 +118,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
           'SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?',
           [id]
         );
-        return res.json(row);
+        return res.json(enrichUserWithRoleLabel(row));
       }
 
       const fields = [];
@@ -152,7 +153,7 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
         'SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?',
         [id]
       );
-      res.json(row);
+      res.json(enrichUserWithRoleLabel(row));
     } catch (e) {
       if (isUniqueConstraint(e)) {
         return res.status(409).json({ error: '用户名已存在' });
