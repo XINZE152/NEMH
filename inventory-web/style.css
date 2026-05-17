@@ -2208,3 +2208,161 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     display: block;
 }
+
+/* 返回工作台 */
+.back-to-workbench-wrap {
+    margin-bottom: 14px;
+}
+
+.back-to-workbench-btn.btn-primary {
+    width: auto;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    justify-content: center;
+}
+
+.back-to-workbench-btn.btn-primary:hover {
+    transform: translateY(-2px);
+}
+
+/* 工作台 */
+.workbench-page-header h1 {
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.workbench-page-header h1 i {
+    display: none;
+}
+
+.workbench-top-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.workbench-panel {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    padding: 24px 28px 28px;
+}
+
+.workbench-panel-wide {
+    margin-bottom: 24px;
+}
+
+.workbench-panel-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.workbench-panel-title i {
+    color: #2196f3;
+    font-size: 18px;
+}
+
+.workbench-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.workbench-admin-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.workbench-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+    text-align: left;
+    padding: 20px 22px;
+    border: 1px solid #e8ecf0;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    font-family: inherit;
+}
+
+.workbench-entry:hover {
+    border-color: #90caf9;
+    box-shadow: 0 4px 14px rgba(33, 150, 243, 0.12);
+    background: #f8fbff;
+}
+
+.workbench-entry:focus-visible {
+    outline: 2px solid #2196f3;
+    outline-offset: 2px;
+}
+
+.workbench-entry-compact {
+    padding: 18px 20px;
+}
+
+.workbench-entry-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: #e3f2fd;
+    color: #1976d2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.workbench-entry-compact .workbench-entry-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+}
+
+.workbench-entry-text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.workbench-entry-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    line-height: 1.3;
+}
+
+.workbench-entry-desc {
+    font-size: 13px;
+    color: #7f8c8d;
+    line-height: 1.45;
+}
+
+@media (max-width: 1024px) {
+    .workbench-top-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .workbench-admin-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .workbench-admin-grid {
+        grid-template-columns: 1fr;
+    }
+}

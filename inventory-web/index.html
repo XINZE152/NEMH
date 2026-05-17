@@ -78,15 +78,8 @@
             </div>
             <div class="header-center">
                 <nav class="main-nav">
-                    <a href="#" class="nav-item" data-page="dashboard"><i class="fas fa-home"></i> 首页</a>
-                    <a href="#" class="nav-item" data-page="warehouse"><i class="fas fa-building"></i> 库房管理</a>
-                    <a href="#" class="nav-item" data-page="pricing"><i class="fas fa-tag"></i> 收货定价</a>
-                    <a href="#" class="nav-item" data-page="quotation"><i class="fas fa-chart-line"></i> 对外报价</a>
-                    <a href="#" class="nav-item" data-page="inbound"><i class="fas fa-inbox"></i> 收货入库</a>
-                    <a href="#" class="nav-item" data-page="outbound"><i class="fas fa-truck"></i> 出库管理</a>
-                    <a href="#" class="nav-item" data-page="inventory"><i class="fas fa-warehouse"></i> 库存查询</a>
-                    <a href="#" class="nav-item" data-page="reports"><i class="fas fa-file-alt"></i> 报表中心</a>
-                    <a href="#" class="nav-item" data-page="users" id="nav-item-users"><i class="fas fa-users-cog"></i> 用户管理</a>
+                    <a href="#" class="nav-item active" data-page="dashboard"><i class="fas fa-home"></i> 首页</a>
+                    <a href="#" class="nav-item" data-page="workbench"><i class="fas fa-th-large"></i> 工作台</a>
                 </nav>
             </div>
             <div class="header-right">
@@ -206,6 +199,96 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- 工作台 -->
+            <div id="workbench-page" class="content-page">
+                <div class="page-header workbench-page-header">
+                    <h1>工作台</h1>
+                    <p>选择功能入口进入对应业务页面</p>
+                </div>
+
+                <div class="workbench-top-grid">
+                    <section class="workbench-panel">
+                        <h2 class="workbench-panel-title">
+                            <i class="fas fa-tags" aria-hidden="true"></i> 价格管理
+                        </h2>
+                        <div class="workbench-panel-body">
+                            <button type="button" class="workbench-entry" data-page="pricing">
+                                <span class="workbench-entry-icon"><i class="fas fa-tag" aria-hidden="true"></i></span>
+                                <span class="workbench-entry-text">
+                                    <span class="workbench-entry-title">收货定价</span>
+                                    <span class="workbench-entry-desc">记录采购价格，作为入库成本依据</span>
+                                </span>
+                            </button>
+                            <button type="button" class="workbench-entry" data-page="quotation">
+                                <span class="workbench-entry-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
+                                <span class="workbench-entry-text">
+                                    <span class="workbench-entry-title">对外报价</span>
+                                    <span class="workbench-entry-desc">发布与管理对外销售价格</span>
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="workbench-panel">
+                        <h2 class="workbench-panel-title">
+                            <i class="fas fa-boxes" aria-hidden="true"></i> 库存管理
+                        </h2>
+                        <div class="workbench-panel-body">
+                            <button type="button" class="workbench-entry" data-page="inbound">
+                                <span class="workbench-entry-icon"><i class="fas fa-inbox" aria-hidden="true"></i></span>
+                                <span class="workbench-entry-text">
+                                    <span class="workbench-entry-title">收货入库</span>
+                                    <span class="workbench-entry-desc">登记入库单与入库凭证</span>
+                                </span>
+                            </button>
+                            <button type="button" class="workbench-entry" data-page="outbound">
+                                <span class="workbench-entry-icon"><i class="fas fa-truck" aria-hidden="true"></i></span>
+                                <span class="workbench-entry-text">
+                                    <span class="workbench-entry-title">出库管理</span>
+                                    <span class="workbench-entry-desc">预出库、实际出库与出库历史</span>
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="workbench-panel workbench-panel-wide">
+                    <h2 class="workbench-panel-title">
+                        <i class="fas fa-cog" aria-hidden="true"></i> 后台配置
+                    </h2>
+                    <div class="workbench-admin-grid">
+                        <button type="button" class="workbench-entry workbench-entry-compact" data-page="warehouse">
+                            <span class="workbench-entry-icon"><i class="fas fa-building" aria-hidden="true"></i></span>
+                            <span class="workbench-entry-text">
+                                <span class="workbench-entry-title">库房管理</span>
+                                <span class="workbench-entry-desc">维护库房与仓储信息</span>
+                            </span>
+                        </button>
+                        <button type="button" class="workbench-entry workbench-entry-compact" data-page="inventory">
+                            <span class="workbench-entry-icon"><i class="fas fa-warehouse" aria-hidden="true"></i></span>
+                            <span class="workbench-entry-text">
+                                <span class="workbench-entry-title">库存查询</span>
+                                <span class="workbench-entry-desc">库存预警与库存报表</span>
+                            </span>
+                        </button>
+                        <button type="button" class="workbench-entry workbench-entry-compact" data-page="reports">
+                            <span class="workbench-entry-icon"><i class="fas fa-file-alt" aria-hidden="true"></i></span>
+                            <span class="workbench-entry-text">
+                                <span class="workbench-entry-title">报表中心</span>
+                                <span class="workbench-entry-desc">利润汇总与库存分析</span>
+                            </span>
+                        </button>
+                        <button type="button" class="workbench-entry workbench-entry-compact" data-page="users" id="workbench-entry-users">
+                            <span class="workbench-entry-icon"><i class="fas fa-users-cog" aria-hidden="true"></i></span>
+                            <span class="workbench-entry-text">
+                                <span class="workbench-entry-title">用户管理</span>
+                                <span class="workbench-entry-desc">账号与角色权限配置</span>
+                            </span>
+                        </button>
+                    </div>
+                </section>
             </div>
 
             <!-- 收货定价页面 -->
@@ -616,7 +699,7 @@
                         <i class="fas fa-plus"></i> 新建用户
                     </button>
                 </div>
-                <p class="form-hint" style="margin: 0 0 16px;">至少保留一个用户；密码不少于 4 位</p>
+                <p class="form-hint" style="margin: 0 0 16px;">至少保留一个用户；密码不少于 4 位。角色与后端一致：<strong>统计部</strong>（statistics，报价/报表/用户管理等）、<strong>财务部管理员</strong>（warehouse，收货定价/入库/出库）。内置账号 <code>admin</code> 为超级管理员，拥有全部功能。</p>
                 <div class="data-table-container">
                     <table class="data-table">
                         <thead>
@@ -1214,8 +1297,8 @@
                         <div class="form-group">
                             <label for="system-user-role">角色</label>
                             <select id="system-user-role">
-                                <option value="warehouse">财务部（warehouse）</option>
-                                <option value="statistics">系统管理员（statistics）</option>
+                                <option value="warehouse">财务部管理员（warehouse）</option>
+                                <option value="statistics">统计部（statistics）</option>
                             </select>
                         </div>
                     </div>

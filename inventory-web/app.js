@@ -712,6 +712,16 @@ function setupEventListeners() {
             switchPage(page);
         });
     });
+
+    const workbenchPage = document.getElementById('workbench-page');
+    if (workbenchPage) {
+        workbenchPage.addEventListener('click', function (e) {
+            const entry = e.target.closest('.workbench-entry');
+            if (!entry || entry.disabled || entry.style.display === 'none') return;
+            const page = entry.dataset.page;
+            if (page) switchPage(page);
+        });
+    }
     
     // 收货定价相关
     document.getElementById('add-pricing-btn').addEventListener('click', showAddPricingModal);
@@ -930,45 +940,95 @@ function showAppPage() {
     loadCurrentPage();
 }
 
+/** 当前角色是否可进入某业务页（与顶栏/工作台共用） */
+function hasPagePermission(page) {
+    const permissions = AppState.currentRole?.permissions || [];
+    if (permissions.includes('all')) return true;
+
+    switch (page) {
+        case 'dashboard':
+        case 'workbench':
+            return true;
+        case 'pricing':
+            return permissions.includes('pricing');
+        case 'inbound':
+        case 'outbound':
+        case 'warehouse':
+            return (
+                permissions.includes('pricing') ||
+                permissions.includes('inbound') ||
+                permissions.includes('outbound')
+            );
+        case 'quotation':
+            return permissions.includes('quotation');
+        case 'inventory':
+        case 'reports':
+            return permissions.includes('report');
+        case 'users':
+            return isSystemAdministrator();
+        default:
+            return false;
+    }
+}
+
 // 更新菜单可见性
 function updateMenuVisibility() {
-    const permissions = AppState.currentRole.permissions;
-    const allPermissions = permissions.includes('all');
-    
-    document.querySelectorAll('.nav-item').forEach(item => {
+    document.querySelectorAll('.nav-item').forEach((item) => {
         const page = item.dataset.page;
-        let hasPermission = allPermissions;
-        
-        if (!hasPermission) {
-            switch(page) {
-                case 'pricing':
-                    hasPermission = permissions.includes('pricing');
-                    break;
-                case 'inbound':
-                case 'outbound':
-                case 'warehouse':
-                    hasPermission = permissions.includes('pricing') ||
-                                   permissions.includes('inbound') ||
-                                   permissions.includes('outbound');
-                    break;
-                case 'quotation':
-                    hasPermission = permissions.includes('quotation');
-                    break;
-                case 'inventory':
-                case 'reports':
-                    hasPermission = permissions.includes('report');
-                    break;
-                case 'dashboard':
-                    hasPermission = true;
-                    break;
-                case 'users':
-                    hasPermission = allPermissions;
-                    break;
-            }
-        }
-        
-        item.style.display = hasPermission ? 'flex' : 'none';
+        item.style.display = hasPagePermission(page) ? 'flex' : 'none';
     });
+    updateWorkbenchVisibility();
+}
+
+function updateWorkbenchVisibility() {
+    document.querySelectorAll('.workbench-entry').forEach((entry) => {
+        const page = entry.dataset.page;
+        const allowed = hasPagePermission(page);
+        entry.style.display = allowed ? '' : 'none';
+        entry.disabled = !allowed;
+    });
+
+    document.querySelectorAll('.workbench-panel').forEach((panel) => {
+        const entries = panel.querySelectorAll('.workbench-entry');
+        const anyVisible = Array.from(entries).some((el) => el.style.display !== 'none');
+        panel.style.display = anyVisible ? '' : 'none';
+    });
+}
+
+function loadWorkbench() {
+    updateWorkbenchVisibility();
+}
+
+const WORKBENCH_BACK_PAGES = new Set([
+    'pricing',
+    'quotation',
+    'inbound',
+    'outbound',
+    'warehouse',
+    'inventory',
+    'reports',
+    'users',
+]);
+
+function updateBackToWorkbenchButton(page) {
+    document.querySelectorAll('.back-to-workbench-wrap').forEach((el) => el.remove());
+    if (!WORKBENCH_BACK_PAGES.has(page)) return;
+
+    const pageEl = document.getElementById(`${page}-page`);
+    const header = pageEl?.querySelector('.page-header');
+    if (!header) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'back-to-workbench-wrap';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-primary back-to-workbench-btn';
+    btn.innerHTML = '<i class="fas fa-arrow-left" aria-hidden="true"></i> 返回工作台';
+    btn.addEventListener('click', function () {
+        switchPage('workbench');
+    });
+    wrap.appendChild(btn);
+    header.insertBefore(wrap, header.firstChild);
 }
 
 // 切换页面
@@ -999,6 +1059,7 @@ function switchPage(page) {
     if (targetPage) {
         targetPage.classList.add('active');
         loadPageContent(page);
+        updateBackToWorkbenchButton(page);
     }
 }
 
@@ -1007,6 +1068,9 @@ function loadPageContent(page) {
     switch(page) {
         case 'dashboard':
             loadDashboard();
+            break;
+        case 'workbench':
+            loadWorkbench();
             break;
         case 'pricing':
             loadPricingPage();
@@ -1038,9 +1102,11 @@ function loadPageContent(page) {
 let systemUsersCache = [];
 let systemUserEditingId = null;
 
-function formatSystemUserRole(role) {
-    if (role === 'statistics') return '系统管理员';
-    if (role === 'warehouse') return '财务部';
+/** 与后端 roleLabels.js 展示名一致 */
+function formatSystemUserRole(role, user) {
+    if (user && user.roleDisplayName) return user.roleDisplayName;
+    if (role === 'statistics') return '统计部';
+    if (role === 'warehouse') return '财务部管理员';
     return role || '-';
 }
 
@@ -1078,7 +1144,7 @@ async function loadSystemUsersList() {
                 return `<tr>
                     <td>${u.id}</td>
                     <td>${escapeHtml(u.username)}</td>
-                    <td>${escapeHtml(formatSystemUserRole(u.role))}</td>
+                    <td>${escapeHtml(formatSystemUserRole(u.role, u))}</td>
                     <td>${escapeHtml(u.created_at || '-')}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-icon" onclick="editUser(${u.id})" title="编辑">
