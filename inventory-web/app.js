@@ -552,17 +552,50 @@ function canDeleteInboundOrder(order) {
     return canEditInboundOrder(order);
 }
 
-function inboundStatusBadgeHtml(status) {
+function formatInboundTonShort(w, unit) {
+    const n = Number(w) || 0;
+    const u = unit || '吨';
+    const text = n % 1 === 0 ? String(n) : n.toFixed(2);
+    return `${text}${u}`;
+}
+
+/** 仅展示大于 0 的已出库/预出库吨数，用 · 连接 */
+function formatInboundOutboundWeightHint(actual, pre, unit) {
+    const parts = [];
+    const a = Number(actual) || 0;
+    const p = Number(pre) || 0;
+    if (a > 0) parts.push(`已出库 ${formatInboundTonShort(a, unit)}`);
+    if (p > 0) parts.push(`预出库 ${formatInboundTonShort(p, unit)}`);
+    return parts.join(' · ');
+}
+
+function inboundStatusBadgeHtml(orderOrStatus, unit) {
+    const order = orderOrStatus && typeof orderOrStatus === 'object' ? orderOrStatus : null;
+    const status = order ? order.status : orderOrStatus;
     const st = normalizeInboundFlowStatus(status);
+    const u = unit || '吨';
+
     switch (st) {
         case 'approved':
             return '<span class="badge badge-success">待出库</span>';
         case 'rejected':
             return '<span class="badge badge-danger">已驳回</span>';
-        case 'outbounding':
+        case 'outbounding': {
+            const pre = order ? Number(order.preOutboundWeight) || 0 : 0;
+            if (pre > 0) {
+                return `<span class="badge badge-info">出库中</span><span class="inbound-status-extra">预出库 ${formatInboundTonShort(pre, u)}</span>`;
+            }
             return '<span class="badge badge-info">出库中</span>';
-        case 'partial':
-            return '<span class="badge badge-secondary">部分已出库</span>';
+        }
+        case 'partial': {
+            const actual = order ? Number(order.actualOutboundWeight) || 0 : 0;
+            const pre = order ? Number(order.preOutboundWeight) || 0 : 0;
+            const hint = formatInboundOutboundWeightHint(actual, pre, u);
+            const extra = hint
+                ? `<span class="inbound-status-extra">${hint}</span>`
+                : '';
+            return `<span class="badge badge-secondary">部分已出库</span>${extra}`;
+        }
         case 'completed':
             return '<span class="badge badge-success">全部已出库</span>';
         default:
@@ -570,8 +603,11 @@ function inboundStatusBadgeHtml(status) {
     }
 }
 
-function inboundStatusDetailText(status) {
+function inboundStatusDetailText(orderOrStatus, unit) {
+    const order = orderOrStatus && typeof orderOrStatus === 'object' ? orderOrStatus : null;
+    const status = order ? order.status : orderOrStatus;
     const st = normalizeInboundFlowStatus(status);
+    const u = unit || '吨';
     const map = {
         approved: '待出库',
         rejected: '已驳回',
@@ -579,7 +615,18 @@ function inboundStatusDetailText(status) {
         partial: '部分已出库',
         completed: '全部已出库',
     };
-    return map[st] || st || '-';
+    let base = map[st] || st || '-';
+    if (order && st === 'partial') {
+        const hint = formatInboundOutboundWeightHint(
+            order.actualOutboundWeight,
+            order.preOutboundWeight,
+            u
+        );
+        if (hint) base += `（${hint}）`;
+    } else if (order && st === 'outbounding' && Number(order.preOutboundWeight) > 0) {
+        base += `（预出库 ${formatInboundTonShort(order.preOutboundWeight, u)}）`;
+    }
+    return base;
 }
 
 /** 入庫單：date 補齊；images[] 與舊 image 合併後寫入 images，移除 image */
@@ -1400,28 +1447,41 @@ function formatPricingRecordNo(record) {
 }
 
 /** 出库历史：汇总 FIFO 关联的入库单号（去重，顿号分隔） */
-function formatOutboundInboundOrderNos(outboundOrderId) {
-    const subs = AppState.outboundSuborders.filter(
-        (s) => s.outboundOrderId === outboundOrderId
-    );
+/** 出库历史：入库单号及本单 FIFO 扣减吨数，如 RK-20260516-1447(20吨) */
+function formatOutboundInboundOrderNos(outboundOrderId, unit) {
+    const u = unit || '吨';
+    const subs = AppState.outboundSuborders
+        .filter((s) => s.outboundOrderId === outboundOrderId)
+        .slice()
+        .sort((a, b) => {
+            const la = a.lineNo || 0;
+            const lb = b.lineNo || 0;
+            if (la !== lb) return la - lb;
+            return (a.id || 0) - (b.id || 0);
+        });
     if (!subs.length) return '-';
-    const seen = new Set();
-    const parts = [];
+
+    const weightByNo = new Map();
+    const orderKeys = [];
     subs.forEach((sub) => {
-        const fromSub = sub.inboundOrderNo && String(sub.inboundOrderNo).trim();
-        if (fromSub) {
-            if (!seen.has(fromSub)) {
-                seen.add(fromSub);
-                parts.push(fromSub);
-            }
-            return;
-        }
         const inbound = AppState.inboundOrders.find((o) => o.id === sub.inboundOrderId);
-        const no = inbound?.orderNo;
-        if (no && !seen.has(no)) {
-            seen.add(no);
-            parts.push(no);
-        }
+        const no =
+            (sub.inboundOrderNo && String(sub.inboundOrderNo).trim()) ||
+            inbound?.orderNo ||
+            (sub.inboundOrderId != null ? `#${sub.inboundOrderId}` : '');
+        if (!no) return;
+        const w =
+            Number(sub.actualWeight) > 0
+                ? Number(sub.actualWeight)
+                : Number(sub.preWeight) || 0;
+        if (!weightByNo.has(no)) orderKeys.push(no);
+        weightByNo.set(no, (weightByNo.get(no) || 0) + w);
+    });
+
+    const parts = orderKeys.map((no) => {
+        const w = weightByNo.get(no) || 0;
+        const wText = w % 1 === 0 ? String(w) : w.toFixed(2);
+        return `${no}(${wText}${u})`;
     });
     return parts.length ? parts.join('、') : '-';
 }
@@ -2204,7 +2264,7 @@ function loadInboundPage() {
         if (!material || !warehouse) return;
         
         const flowStatus = normalizeInboundFlowStatus(order.status);
-        const statusBadge = inboundStatusBadgeHtml(order.status);
+        const statusBadge = inboundStatusBadgeHtml(order, material.unit);
         const showMutate = canEditInboundOrder(order);
 
         const whLabel = `${warehouse.code} - ${warehouse.name}`;
@@ -2467,6 +2527,63 @@ function saveInbound() {
     addAction('inbound', `创建入库单 ${orderNo} - ${material?.name} ${weight}吨`);
 }
 
+/** 入库详情：展示关联的出库单及 FIFO 子单 */
+function renderInboundLinkedOutboundRows(inboundOrderId, unit) {
+    const section = document.getElementById('view-inbound-outbound-section');
+    const tbody = document.getElementById('view-inbound-outbound-list');
+    if (!section || !tbody) return;
+
+    const u = unit || '吨';
+    const subs = AppState.outboundSuborders
+        .filter((s) => s.inboundOrderId === inboundOrderId)
+        .slice()
+        .sort((a, b) => {
+            const la = a.lineNo || 0;
+            const lb = b.lineNo || 0;
+            if (la !== lb) return la - lb;
+            return (a.id || 0) - (b.id || 0);
+        });
+
+    if (!subs.length) {
+        section.style.display = 'none';
+        tbody.innerHTML = '';
+        return;
+    }
+
+    section.style.display = 'block';
+    tbody.innerHTML = '';
+
+    subs.forEach((sub) => {
+        const outbound = AppState.outboundOrders.find((o) => o.id === sub.outboundOrderId);
+        const outNo = outbound ? outbound.orderNo : '-';
+        const subNo =
+            (sub.subOrderNo && String(sub.subOrderNo).trim()) ||
+            (outbound ? `${outbound.orderNo}-子${sub.id}` : `子单${sub.id}`);
+        const preW = Number(sub.preWeight) || 0;
+        const actW = Number(sub.actualWeight) || 0;
+        const price =
+            outbound != null && Number.isFinite(Number(outbound.price))
+                ? `${formatCurrency(outbound.price)}/${u}`
+                : '<span style="color:#888;">-</span>';
+        const stLabel = outbound ? outboundOrderStatusLabel(outbound) : '-';
+        const stClass = outbound ? outboundStatusBadgeClass(outbound) : 'badge-secondary';
+        const outNoCell = outbound
+            ? `<button type="button" class="btn btn-sm btn-info" onclick="viewOutboundDetails(${outbound.id})">${escapeHtml(outNo)}</button>`
+            : escapeHtml(outNo);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${outNoCell}</td>
+            <td>${escapeHtml(subNo)}</td>
+            <td>${preW.toFixed(2)} ${u}</td>
+            <td>${actW.toFixed(2)} ${u}</td>
+            <td>${price}</td>
+            <td><span class="badge ${stClass}">${escapeHtml(stLabel)}</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
 // 查看入库单详情
 function viewInbound(id) {
     const order = AppState.inboundOrders.find(o => o.id === id);
@@ -2483,7 +2600,10 @@ function viewInbound(id) {
     document.getElementById('view-total-price').textContent = formatCurrency(order.totalPrice);
     document.getElementById('view-date').textContent = formatQuotationPublishDisplay(order.date);
     
-    document.getElementById('view-status').textContent = inboundStatusDetailText(order.status);
+    document.getElementById('view-status').textContent = inboundStatusDetailText(
+        order,
+        material?.unit || '吨'
+    );
     document.getElementById('view-actual-outbound').textContent = `${order.actualOutboundWeight} ${material?.unit || '吨'}`;
     document.getElementById('view-pre-outbound').textContent = `${order.preOutboundWeight} ${material?.unit || '吨'}`;
 
@@ -2504,6 +2624,8 @@ function viewInbound(id) {
             imgWrap.innerHTML = '';
         }
     }
+
+    renderInboundLinkedOutboundRows(id, material?.unit || '吨');
 
     // 显示模态框
     openModal('view-inbound-modal');
@@ -3343,9 +3465,6 @@ function loadOutboundTab(tab) {
                 <td><span class="badge ${stClass}">${stLabel}</span></td>
                 <td>${formatOutboundTimeDisplay(order.date)}</td>
                 <td>
-                    <button class="btn btn-sm btn-success" onclick="executeOutbound(${order.id})">
-                        <i class="fas fa-play"></i> 执行出库
-                    </button>
                     <button class="btn btn-sm btn-info" onclick="viewOutboundDetails(${order.id})">
                         <i class="fas fa-eye"></i> 详情
                     </button>
@@ -3381,7 +3500,7 @@ function loadOutboundTab(tab) {
                 <td>${order.orderNo}</td>
                 <td>${getWarehouseLabel(order.warehouseId)}</td>
                 <td>${material.name}</td>
-                <td>${formatOutboundInboundOrderNos(order.id)}</td>
+                <td>${formatOutboundInboundOrderNos(order.id, material.unit)}</td>
                 <td>${order.actualWeight} ${material.unit}</td>
                 <td>${formatCurrency(order.price)}/${material.unit}</td>
                 <td>${formatCurrency(avgUnitCost)}/${material.unit}</td>

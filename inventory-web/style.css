@@ -2183,6 +2183,15 @@ body {
     flex: 0 0 auto;
 }
 
+.inbound-status-extra {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #5a6a7a;
+    font-weight: 400;
+}
+
 .outbound-detail-weighing .view-multi-img-wrap img {
     max-width: 100%;
     max-height: min(360px, 50vh);
