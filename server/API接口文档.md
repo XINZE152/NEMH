@@ -56,6 +56,12 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 | `BAOCHI_WAREHOUSE_API_URL` | 宝驰库房列表 GET 地址；配置后可用同步接口，默认禁止本地库房增删改 |
 | `BAOCHI_WAREHOUSE_API_TOKEN` | 可选，访问宝驰接口的 Bearer Token |
 | `BAOCHI_ALLOW_LOCAL_WAREHOUSE_CRUD` | 设为 `1` 时即使配置了宝驰 URL 也允许本地 POST/PUT/DELETE 库房 |
+| `TL_API_BASE_URL` | TL 比价系统基址（同机示例 `http://127.0.0.1:8001`）；配置后可同步库房 |
+| `TL_API_USERNAME` | TL 登录用户名 |
+| `TL_API_PASSWORD` | TL 登录密码 |
+| `TL_ALLOW_LOCAL_WAREHOUSE_CRUD` | 设为 `1` 时即使配置了 TL 也允许本地 POST/PUT/DELETE 库房 |
+| `TL_API_TIMEOUT_MS` | 可选，请求超时毫秒，默认 30000 |
+| `TL_API_TOKEN_REFRESH_MARGIN` | 可选，token 提前刷新秒数，默认 300 |
 
 ### 常见 HTTP 状态
 
@@ -164,9 +170,17 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 从宝驰接口同步库房到本地（需 `BAOCHI_WAREHOUSE_API_URL`）。**成功 200：** `{ ok, synced, total }`。
 
+### `POST /api/admin/warehouses/sync-from-tl`
+
+从 TL 比价系统（`GET /tl/get_warehouses`，只读）同步库房到本地 SQLite。需 `TL_API_BASE_URL`、`TL_API_USERNAME`、`TL_API_PASSWORD`。**成功 200：** `{ ok, synced, total, source: "tl" }`。
+
+### `GET /api/integrations/tl/warehouses`
+
+代理 TL 库房列表（已规范化，不含写操作）。需登录 NEMH 且已配置 TL 环境变量。
+
 ### `GET /api/admin/warehouses`
 
-**Query：** `search`（可选）— 按代码、名称、地址模糊匹配；`sync=1` 时先执行宝驰同步再返回列表。
+**Query：** `search`（可选）— 按代码、名称、地址模糊匹配；`sync=1` 时若已配置则先执行宝驰/TL 同步再返回列表。
 
 **响应：** 数组，元素为 `{ id, code, name, address, externalSource, externalId, createdAt, updatedAt }`（camelCase）。
 

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
-    "build": "node --check src/index.js && node --check src/db.js && node --check src/auth.js && node --check src/logger.js && node --check src/publicRegister.js && node --check src/adminUsers.js && node --check src/warehouses.js && node --check src/purchasePrices.js && node --check src/salePrices.js && node --check src/inventoryStock.js && node --check src/inventoryAlerts.js && node --check src/outboundOrders.js && node --check src/profitReport.js && node --check src/weighbridgeParse.js && node --check src/inventoryWarehouseReport.js && node --check src/inboundOrders.js",
+    "build": "node --check src/index.js && node --check src/db.js && node --check src/auth.js && node --check src/logger.js && node --check src/publicRegister.js && node --check src/adminUsers.js && node --check src/tlApiClient.js && node --check src/tlWarehouses.js && node --check src/warehouses.js && node --check src/purchasePrices.js && node --check src/salePrices.js && node --check src/inventoryStock.js && node --check src/inventoryAlerts.js && node --check src/outboundOrders.js && node --check src/profitReport.js && node --check src/weighbridgeParse.js && node --check src/inventoryWarehouseReport.js && node --check src/inboundOrders.js",
     "start": "node src/index.js"
   },
   "dependencies": {

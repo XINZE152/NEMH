@@ -5,6 +5,12 @@ import {
   isBaocheWarehouseSyncEnabled,
   syncWarehousesFromBaoche,
 } from './baocheWarehouses.js';
+import {
+  isTlWarehouseCrudLocked,
+  isTlWarehouseSyncEnabled,
+  syncWarehousesFromTl,
+  fetchTlWarehouseList,
+} from './tlWarehouses.js';
 
 const log = createLogger('nemh.warehouses');
 
@@ -35,17 +41,74 @@ function mapWarehouseRow(row) {
   };
 }
 
-function baocheCrudBlocked(res) {
-  if (!isBaocheWarehouseCrudLocked()) return false;
-  res.status(403).json({
-    error:
-      '已启用宝驰库房同步，本地不可增删改库房；请配置宝驰接口或设置 BAOCHI_ALLOW_LOCAL_WAREHOUSE_CRUD=1',
-    code: 'BAOCHI_WAREHOUSE_READONLY',
-  });
-  return true;
+function externalWarehouseCrudBlocked(res) {
+  if (isBaocheWarehouseCrudLocked()) {
+    res.status(403).json({
+      error:
+        '已启用宝驰库房同步，本地不可增删改库房；请配置宝驰接口或设置 BAOCHI_ALLOW_LOCAL_WAREHOUSE_CRUD=1',
+      code: 'BAOCHI_WAREHOUSE_READONLY',
+    });
+    return true;
+  }
+  if (isTlWarehouseCrudLocked()) {
+    res.status(403).json({
+      error:
+        '已启用 TL 库房同步，本地不可增删改库房；请设置 TL_ALLOW_LOCAL_WAREHOUSE_CRUD=1 以允许本地维护',
+      code: 'TL_WAREHOUSE_READONLY',
+    });
+    return true;
+  }
+  return false;
 }
 
 export function registerWarehouseRoutes(app, db, authMiddleware) {
+  app.post(
+    '/api/admin/warehouses/sync-from-tl',
+    authMiddleware,
+    async (req, res) => {
+      try {
+        if (!isTlWarehouseSyncEnabled()) {
+          return res.status(400).json({
+            error:
+              '未配置 TL_API_BASE_URL / TL_API_USERNAME，无法从 TL 同步库房',
+            code: 'TL_NOT_CONFIGURED',
+          });
+        }
+        const result = await syncWarehousesFromTl(db);
+        res.json(result);
+      } catch (e) {
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
+        res.status(502).json({
+          error: e?.message || 'TL 库房同步失败',
+          code: 'TL_SYNC_FAILED',
+        });
+      }
+    }
+  );
+
+  app.get(
+    '/api/integrations/tl/warehouses',
+    authMiddleware,
+    async (req, res) => {
+      try {
+        if (!isTlWarehouseSyncEnabled()) {
+          return res.status(400).json({
+            error: '未配置 TL API',
+            code: 'TL_NOT_CONFIGURED',
+          });
+        }
+        const list = await fetchTlWarehouseList();
+        res.json({ ok: true, total: list.length, list });
+      } catch (e) {
+        log.error(`${req.method} ${req.originalUrl}: ${e?.stack || e?.message || e}`);
+        res.status(502).json({
+          error: e?.message || 'TL 库房查询失败',
+          code: 'TL_FETCH_FAILED',
+        });
+      }
+    }
+  );
+
   app.post(
     '/api/admin/warehouses/sync-from-baoche',
     authMiddleware,
@@ -78,6 +141,13 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
           await syncWarehousesFromBaoche(db);
         } catch (e) {
           log.warn(`列表拉取前宝驰同步失败: ${e?.message || e}`);
+        }
+      }
+      if (shouldSync && isTlWarehouseSyncEnabled()) {
+        try {
+          await syncWarehousesFromTl(db);
+        } catch (e) {
+          log.warn(`列表拉取前 TL 同步失败: ${e?.message || e}`);
         }
       }
 
@@ -131,7 +201,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
 
   app.post('/api/admin/warehouses', authMiddleware, async (req, res) => {
     try {
-      if (baocheCrudBlocked(res)) return;
+      if (externalWarehouseCrudBlocked(res)) return;
       const body = req.body || {};
       const code = trimStr(body.code);
       const name = trimStr(body.name);
@@ -168,7 +238,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
 
   app.put('/api/admin/warehouses/:id', authMiddleware, async (req, res) => {
     try {
-      if (baocheCrudBlocked(res)) return;
+      if (externalWarehouseCrudBlocked(res)) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
         return res.status(400).json({ error: '无效 id' });
@@ -249,7 +319,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
 
   app.delete('/api/admin/warehouses/:id', authMiddleware, async (req, res) => {
     try {
-      if (baocheCrudBlocked(res)) return;
+      if (externalWarehouseCrudBlocked(res)) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
         return res.status(400).json({ error: '无效 id' });
