@@ -78,8 +78,7 @@
             </div>
             <div class="header-center">
                 <nav class="main-nav">
-                    <a href="#" class="nav-item active" data-page="dashboard"><i class="fas fa-home"></i> 首页</a>
-                    <a href="#" class="nav-item" data-page="workbench"><i class="fas fa-th-large"></i> 工作台</a>
+                    <a href="#" class="nav-item active" data-page="workbench"><i class="fas fa-home"></i> 进销存系统</a>
                 </nav>
             </div>
             <div class="header-right">
@@ -101,113 +100,12 @@
 
         <!-- 主内容区域 -->
         <main class="app-main">
-            <!-- 首页 -->
-            <div id="dashboard-page" class="content-page active">
-                <div class="page-header">
-                    <h1><i class="fas fa-home"></i> 系统首页</h1>
-                    <p>欢迎使用电动/新能源材料进销存管理系统</p>
-                </div>
-                
-                <div class="dashboard-stats">
-                    <div class="stat-card stat-card-pricing-wide">
-                        <div class="stat-icon" style="background-color: #2196F3;">
-                            <i class="fas fa-tags"></i>
-                        </div>
-                        <div class="stat-content stat-content-pricing-panel">
-                            <h3>各品种最新收货定价与对外报价</h3>
-                            <div id="dashboard-latest-prices" class="dashboard-latest-prices"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background-color: #2196F3;">
-                            <i class="fas fa-inbox"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>本月入库</h3>
-                            <p id="month-inbound-count">0</p>
-                            <span>单</span>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background-color: #FF9800;">
-                            <i class="fas fa-warehouse"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>库存预警</h3>
-                            <p id="warning-count">0</p>
-                            <span>项</span>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background-color: #9C27B0;">
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>本月毛利</h3>
-                            <p id="month-profit">¥0</p>
-                            <span>元</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="dashboard-content">
-                    <div class="dashboard-section">
-                        <h3><i class="fas fa-bell"></i> 系统公告</h3>
-                        <div class="notice-board">
-                            <div class="notice-item">
-                                <div class="notice-icon">
-                                    <i class="fas fa-info-circle"></i>
-                                </div>
-                                <div class="notice-content">
-                                    <h4>系统上线通知</h4>
-                                    <p>电动/新能源材料进销存管理系统已正式上线，请各位用户按照角色权限使用相应功能。</p>
-                                    <span class="notice-time">2023-10-27</span>
-                                </div>
-                            </div>
-                            <div class="notice-item">
-                                <div class="notice-icon">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                </div>
-                                <div class="notice-content">
-                                    <h4>库存预警提醒</h4>
-                                    <p>请及时关注库存预警信息，避免库存积压或短缺影响业务。</p>
-                                    <span class="notice-time">2023-10-26</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="dashboard-section">
-                        <h3><i class="fas fa-history"></i> 最近操作</h3>
-                        <div class="recent-actions">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>时间</th>
-                                        <th>操作类型</th>
-                                        <th>详情</th>
-                                        <th>操作人</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="recent-actions-list">
-                                    <!-- 动态生成 -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 工作台 -->
-            <div id="workbench-page" class="content-page">
+            <!-- 首页（工作台 + 数据概览） -->
+            <div id="workbench-page" class="content-page active">
                 <div class="page-header workbench-page-header">
-                    <h1>工作台</h1>
+                    <h1>首页</h1>
                     <p>选择功能入口进入对应业务页面</p>
                 </div>
-
                 <div class="workbench-top-grid">
                     <section class="workbench-panel">
                         <h2 class="workbench-panel-title">
@@ -256,7 +154,7 @@
 
                 <section class="workbench-panel workbench-panel-wide">
                     <h2 class="workbench-panel-title">
-                        <i class="fas fa-cog" aria-hidden="true"></i> 后台配置
+                        <i class="fas fa-search" aria-hidden="true"></i> 信息查询
                     </h2>
                     <div class="workbench-admin-grid">
                         <button type="button" class="workbench-entry workbench-entry-compact" data-page="warehouse">
@@ -289,6 +187,100 @@
                         </button>
                     </div>
                 </section>
+
+                <div class="workbench-dashboard">
+                    <div class="dashboard-stats">
+                        <div class="stat-card stat-card-pricing-wide">
+                            <div class="stat-icon" style="background-color: #2196F3;">
+                                <i class="fas fa-tags"></i>
+                            </div>
+                            <div class="stat-content stat-content-pricing-panel">
+                                <h3>各品种最新收货定价与对外报价</h3>
+                                <div id="dashboard-latest-prices" class="dashboard-latest-prices"></div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background-color: #2196F3;">
+                                <i class="fas fa-inbox"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>本月入库</h3>
+                                <p id="month-inbound-count">0</p>
+                                <span>单</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background-color: #FF9800;">
+                                <i class="fas fa-warehouse"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>库存积压</h3>
+                                <p id="warning-count">0</p>
+                                <span>项</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background-color: #9C27B0;">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>本月毛利</h3>
+                                <p id="month-profit">¥0</p>
+                                <span>元</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-content">
+                        <div class="dashboard-section">
+                            <h3><i class="fas fa-bell"></i> 系统公告</h3>
+                            <div class="notice-board">
+                                <div class="notice-item">
+                                    <div class="notice-icon">
+                                        <i class="fas fa-info-circle"></i>
+                                    </div>
+                                    <div class="notice-content">
+                                        <h4>系统上线通知</h4>
+                                        <p>电动/新能源材料进销存管理系统已正式上线，请各位用户按照角色权限使用相应功能。</p>
+                                        <span class="notice-time">2023-10-27</span>
+                                    </div>
+                                </div>
+                                <div class="notice-item">
+                                    <div class="notice-icon">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </div>
+                                    <div class="notice-content">
+                                        <h4>库存预警提醒</h4>
+                                        <p>请及时关注库存预警信息，避免库存积压或短缺影响业务。</p>
+                                        <span class="notice-time">2023-10-26</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-section">
+                            <h3><i class="fas fa-history"></i> 最近操作</h3>
+                            <div class="recent-actions">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>时间</th>
+                                            <th>操作类型</th>
+                                            <th>详情</th>
+                                            <th>操作人</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recent-actions-list">
+                                        <!-- 动态生成 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 收货定价页面 -->
@@ -555,6 +547,14 @@
                                 <select id="deduction-mode">
                                     <option value="both">可用库存：总入库 − 实际出库与预出库占用（combined）</option>
                                     <option value="actual">可用库存：总入库 − 仅已实际出库（actual）</option>
+                                </select>
+                            </div>
+                            <div class="warning-status-filter">
+                                <label>预警状态：</label>
+                                <select id="warning-status-filter">
+                                    <option value="overstock" selected>库存积压</option>
+                                    <option value="normal">库存正常</option>
+                                    <option value="all">全部</option>
                                 </select>
                             </div>
                         </div>

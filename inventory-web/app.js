@@ -4,7 +4,7 @@
 const AppState = {
     currentUser: null,
     currentRole: null,
-    currentPage: 'dashboard',
+    currentPage: 'workbench',
 
     // 数据存储
     users: [],
@@ -794,6 +794,10 @@ function setupEventListeners() {
     // 库存预警相关
     document.getElementById('warning-threshold').addEventListener('change', updateWarningList);
     document.getElementById('deduction-mode').addEventListener('change', updateWarningList);
+    const warningStatusFilter = document.getElementById('warning-status-filter');
+    if (warningStatusFilter) {
+        warningStatusFilter.addEventListener('change', updateWarningList);
+    }
     document.getElementById('search-report-btn').addEventListener('click', loadInventoryReport);
     
     // 报表相关
@@ -1023,7 +1027,7 @@ function updateBackToWorkbenchButton(page) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn-primary back-to-workbench-btn';
-    btn.innerHTML = '<i class="fas fa-arrow-left" aria-hidden="true"></i> 返回工作台';
+    btn.innerHTML = '<i class="fas fa-arrow-left" aria-hidden="true"></i> 返回首页';
     btn.addEventListener('click', function () {
         switchPage('workbench');
     });
@@ -1033,11 +1037,11 @@ function updateBackToWorkbenchButton(page) {
 
 // 切换页面
 function switchPage(page) {
-    if (page === 'review') {
-        page = 'dashboard';
+    if (page === 'review' || page === 'dashboard') {
+        page = 'workbench';
     }
     if (page === 'users' && !isSystemAdministrator()) {
-        page = 'dashboard';
+        page = 'workbench';
     }
     AppState.currentPage = page;
     
@@ -1067,10 +1071,8 @@ function switchPage(page) {
 function loadPageContent(page) {
     switch(page) {
         case 'dashboard':
-            loadDashboard();
-            break;
         case 'workbench':
-            loadWorkbench();
+            loadDashboard();
             break;
         case 'pricing':
             loadPricingPage();
@@ -1374,7 +1376,7 @@ function addAction(type, detail) {
     saveToLocalStorage();
     
     // 更新最近操作列表
-    if (AppState.currentPage === 'dashboard') {
+    if (AppState.currentPage === 'dashboard' || AppState.currentPage === 'workbench') {
         updateRecentActions();
     }
 }
@@ -1707,7 +1709,7 @@ function updateDashboardStats() {
     });
     let warningCount = 0;
     Object.values(inventoryByMaterialWarehouse).forEach((inv) => {
-        if (inv.totalAvailable < threshold) warningCount++;
+        if (inv.totalAvailable > threshold) warningCount++;
     });
 
     const monthCompleted = AppState.outboundOrders.filter(
@@ -1761,8 +1763,9 @@ function updateRecentActions() {
     });
 }
 
-// 加载仪表板页面
+// 加载首页工作台（已合并原仪表板数据区）
 function loadDashboard() {
+    loadWorkbench();
     updateDashboardStats();
 }
 
@@ -4392,6 +4395,39 @@ function loadInventoryTab(tab) {
     }
 }
 
+function getInventoryWarningThreshold() {
+    const el = document.getElementById('warning-threshold');
+    return el ? parseInt(el.value, 10) || 30 : 30;
+}
+
+function getInventoryWarningStatusFilter() {
+    const el = document.getElementById('warning-status-filter');
+    return el ? el.value : 'overstock';
+}
+
+function isInventoryOverstock(availableWeight, threshold) {
+    return Number(availableWeight) > threshold;
+}
+
+function matchesInventoryWarningStatusFilter(isOverstock, filter) {
+    if (filter === 'all') return true;
+    if (filter === 'overstock') return isOverstock;
+    if (filter === 'normal') return !isOverstock;
+    return true;
+}
+
+function inventoryWarningStatusBadgeHtml(isOverstock) {
+    return isOverstock
+        ? '<span class="badge badge-warning">库存积压</span>'
+        : '<span class="badge badge-success">库存正常</span>';
+}
+
+function renderWarningListEmptyRow(warningList, message) {
+    warningList.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#95a5a6;">${escapeHtml(
+        message || '暂无符合条件的数据'
+    )}</td></tr>`;
+}
+
 // 更新预警列表（列与 index.html 表头一致：库房、品种、总入库重量、待出库重量、预出库重量、扣减重量、可用库存、预警状态）
 function updateWarningList() {
     const warningList = document.getElementById('warning-list');
@@ -4399,8 +4435,9 @@ function updateWarningList() {
     
     warningList.innerHTML = '';
     
-    const threshold = parseInt(document.getElementById('warning-threshold').value, 10) || 30;
+    const threshold = getInventoryWarningThreshold();
     const deductionMode = document.getElementById('deduction-mode').value;
+    const statusFilter = getInventoryWarningStatusFilter();
 
     if (useApiMode()) {
         const basis = deductionMode === 'both' ? 'combined' : 'actual';
@@ -4412,6 +4449,7 @@ function updateWarningList() {
                     onlyReminder: false,
                 });
                 warningList.innerHTML = '';
+                let visibleCount = 0;
                 (data.items || []).forEach(function (it) {
                     const wh = it.warehouse || {};
                     const mat = it.material || {};
@@ -4422,9 +4460,12 @@ function updateWarningList() {
                         basis === 'actual'
                             ? Number(it.actualOutboundWeight || 0)
                             : Number(it.combinedOutboundDeductionWeight || 0);
-                    const isWarning = rem < threshold;
+                    const isOverstock = isInventoryOverstock(rem, threshold);
+                    if (!matchesInventoryWarningStatusFilter(isOverstock, statusFilter)) return;
+
+                    visibleCount += 1;
                     const row = document.createElement('tr');
-                    row.className = isWarning ? 'warning-row' : '';
+                    row.className = isOverstock ? 'warning-row' : '';
                     row.innerHTML = `
             <td>${wh.code} - ${wh.name}</td>
             <td>${mat.code} - ${mat.name}</td>
@@ -4433,14 +4474,13 @@ function updateWarningList() {
             <td>${Number(it.plannedOutboundWeight || 0).toFixed(2)} 吨</td>
             <td>${deductTon.toFixed(2)} 吨</td>
             <td>${rem.toFixed(2)} 吨</td>
-            <td>
-                ${isWarning
-                    ? '<span class="badge badge-danger">库存不足</span>'
-                    : '<span class="badge badge-success">库存正常</span>'}
-            </td>
+            <td>${inventoryWarningStatusBadgeHtml(isOverstock)}</td>
         `;
                     warningList.appendChild(row);
                 });
+                if (visibleCount === 0) {
+                    renderWarningListEmptyRow(warningList);
+                }
             } catch (e) {
                 warningList.innerHTML =
                     '<tr><td colspan="8" style="text-align:center;color:#c00;">加载预警失败：' +
@@ -4478,6 +4518,7 @@ function updateWarningList() {
         agg.totalAvailable += Math.max(0, availRaw);
     });
     
+    let visibleCount = 0;
     Object.values(inventoryByMaterialWarehouse).forEach((inventory) => {
         const material = AppState.materials.find((m) => m.id === inventory.materialId);
         const warehouse = AppState.warehouses.find((w) => w.id === inventory.warehouseId);
@@ -4489,10 +4530,12 @@ function updateWarningList() {
                 : inventory.totalInbound -
                   inventory.pendingOutbound -
                   inventory.totalPreOutbound;
-        const isWarning = inventory.totalAvailable < threshold;
-        
+        const isOverstock = isInventoryOverstock(inventory.totalAvailable, threshold);
+        if (!matchesInventoryWarningStatusFilter(isOverstock, statusFilter)) return;
+
+        visibleCount += 1;
         const row = document.createElement('tr');
-        row.className = isWarning ? 'warning-row' : '';
+        row.className = isOverstock ? 'warning-row' : '';
         row.style.cursor = 'pointer';
         row.title = '点击查看库房品种库存详情';
         row.onclick = () => viewInventoryDetails(inventory.materialId, inventory.warehouseId);
@@ -4504,14 +4547,13 @@ function updateWarningList() {
             <td>${inventory.totalPreOutbound.toFixed(2)} ${material.unit}</td>
             <td>${deductionWeight.toFixed(2)} ${material.unit}</td>
             <td>${inventory.totalAvailable.toFixed(2)} ${material.unit}</td>
-            <td>
-                ${isWarning
-                    ? '<span class="badge badge-danger">库存不足</span>'
-                    : '<span class="badge badge-success">库存正常</span>'}
-            </td>
+            <td>${inventoryWarningStatusBadgeHtml(isOverstock)}</td>
         `;
         warningList.appendChild(row);
     });
+    if (visibleCount === 0) {
+        renderWarningListEmptyRow(warningList);
+    }
 }
 
 // 查看库存详情
