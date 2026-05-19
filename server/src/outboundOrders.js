@@ -158,11 +158,19 @@ function mapOutboundRow(row) {
   const actualWeight = roundTon(row.actualWeight);
   const unitPrice = roundMoney(row.unitPrice);
   const plannedWeight = roundTon(row.plannedWeight);
+  const unfulfilledPlannedWeight = completed
+    ? 0
+    : roundTon(Math.max(0, plannedWeight - actualWeight));
   return {
     ...row,
     plannedWeight,
     actualWeight,
     unitPrice,
+    /** 有出库计划但尚未实际出库的重量；已完成单为 0 */
+    unfulfilledPlannedWeight,
+    preOutboundWeight: unfulfilledPlannedWeight,
+    /** 计划总量 = 未出库计划 + 已实际出库 */
+    totalPlannedWeight: roundTon(unfulfilledPlannedWeight + actualWeight),
     /** 业务出库完成时间（与 updatedAt 一致，ISO8601 含时分秒） */
     completedAt: outboundTime,
     outboundTime,

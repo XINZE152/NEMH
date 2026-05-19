@@ -871,11 +871,23 @@
           { "name": "page", "in": "query", "schema": { "type": "integer" } },
           { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
           { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "warehouseId", "in": "query", "schema": { "type": "integer" } },
           {
             "name": "auditStatus",
             "in": "query",
             "schema": { "type": "string", "enum": ["pending", "approved", "rejected"] }
-          }
+          },
+          {
+            "name": "inventoryStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["pending_audit", "pending_outbound", "outbounding", "partial_outbound", "fully_outbound"]
+            }
+          },
+          { "name": "keyword", "in": "query", "schema": { "type": "string" } },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } }
         ],
         "responses": {
           "200": {
@@ -892,8 +904,13 @@
                       "weight": 10.5,
                       "unitPrice": 3200,
                       "totalAmount": 33600,
-                      "auditStatus": "pending",
-                      "auditStatusText": "待审核",
+                      "auditStatus": "approved",
+                      "auditStatusText": "已入库",
+                      "actualOutboundWeight": 0,
+                      "preOutboundWeight": 5,
+                      "availableWeight": 5.5,
+                      "inventoryStatus": "outbounding",
+                      "inventoryStatusLabel": "出库中",
                       "inboundPhoto": "https://example.com/in.jpg"
                     }
                   ],
@@ -1332,12 +1349,18 @@
       "get": {
         "tags": ["库存与预警"],
         "summary": "入库汇总预警",
-        "description": "basis=combined 时扣减=实际出库+预出库；占用重量从 outbound_orders 汇总，与 FIFO 一致。",
+        "description": "囤积预警：可用库存 > thresholdTon。deductionWeight 固定为实际出库；预出库占用从 FIFO 汇总。",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           { "name": "basis", "in": "query", "schema": { "type": "string", "enum": ["actual", "combined"], "default": "combined" } },
           { "name": "thresholdTon", "in": "query", "schema": { "type": "number" } },
-          { "name": "onlyThirtyTonReminder", "in": "query", "schema": { "type": "string", "enum": ["1", "true"] } }
+          {
+            "name": "alertStatus",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["overstock", "normal", "all"] }
+          },
+          { "name": "onlyThirtyTonReminder", "in": "query", "schema": { "type": "string", "enum": ["1", "true"] } },
+          { "name": "includeReport", "in": "query", "schema": { "type": "string", "enum": ["1", "true"] } }
         ],
         "responses": {
           "200": {
@@ -1347,11 +1370,23 @@
                 "example": {
                   "basis": "combined",
                   "defaultBasis": "combined",
-                  "combinedRuleDescription": "扣减重量 = 已完成实际出库重量 + 待完成预出库重量",
                   "thresholdTon": 30,
-                  "onlyThirtyTonReminder": false,
-                  "hasInboundTonReminder": false,
-                  "items": []
+                  "alertStatusFilter": "all",
+                  "hasOverstockAlert": true,
+                  "items": [
+                    {
+                      "isOverstockAlert": true,
+                      "alertStatus": "overstock",
+                      "deductionWeight": 10,
+                      "remainingWeightByBasis": 45,
+                      "preOutboundWeight": 5
+                    }
+                  ],
+                  "report": {
+                    "overstockCount": 1,
+                    "normalCount": 0,
+                    "totalExcessOverThresholdTon": 15
+                  }
                 }
               }
             }
@@ -1387,6 +1422,39 @@
             }
           },
           "400": { "description": "参数无效" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/reports/inbound-summary": {
+      "get": {
+        "tags": ["库存与预警"],
+        "summary": "入库统计报表",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "materialId", "in": "query", "schema": { "type": "integer" } },
+          { "name": "warehouseId", "in": "query", "schema": { "type": "integer" } },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["warehouse_material", "material"], "default": "warehouse_material" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "按库房+品种或品种聚合",
+            "content": {
+              "application/json": {
+                "example": {
+                  "groupBy": "warehouse_material",
+                  "totals": { "inboundOrderCount": 12, "inboundWeight": 360, "inboundAmount": 1152000 },
+                  "items": []
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }

@@ -1,6 +1,12 @@
 import { run, all, get } from './db.js';
 import { requireStatisticsRole, requireWarehouseRole } from './auth.js';
 import { createLogger, apiError } from './logger.js';
+import {
+  fetchInboundFifoWeightMap,
+  enrichInboundWithOutboundWeights,
+  inboundInventoryStatusWhereClause,
+  INVENTORY_STATUS_KEYS,
+} from './inventoryInboundWeights.js';
 
 const log = createLogger('nemh.inboundOrders');
 
@@ -18,6 +24,13 @@ function normalizeInboundAt(v) {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+function parseDateQuery(raw) {
+  if (raw == null || raw === '') return null;
+  const s = String(raw).trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return s;
 }
 
 /** 与「最新定价」比较：元/吨，保留两位小数比较 */
@@ -148,7 +161,10 @@ function mapInboundRow(row) {
 
 async function fetchInboundRow(db, id) {
   const row = await get(db, `${INBOUND_ROW_SQL} WHERE io.id = ?`, [id]);
-  return mapInboundRow(row);
+  const mapped = mapInboundRow(row);
+  if (!mapped) return null;
+  const weightMap = await fetchInboundFifoWeightMap(db, [id]);
+  return enrichInboundWithOutboundWeights(mapped, weightMap);
 }
 
 function parseInboundPhotoFromBody(body) {
@@ -277,16 +293,53 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
       const materialId = req.query.materialId
         ? Number(req.query.materialId)
         : null;
+      const warehouseIdRaw = req.query.warehouseId ?? req.query.warehouse_id;
+      const warehouseId =
+        warehouseIdRaw != null && warehouseIdRaw !== ''
+          ? Number(warehouseIdRaw)
+          : null;
       const auditStatus =
         typeof req.query.auditStatus === 'string'
           ? req.query.auditStatus.trim()
           : '';
+      const inventoryStatus =
+        typeof req.query.inventoryStatus === 'string'
+          ? req.query.inventoryStatus.trim()
+          : typeof req.query.inventory_status === 'string'
+            ? req.query.inventory_status.trim()
+            : '';
+      const keyword =
+        typeof req.query.keyword === 'string'
+          ? req.query.keyword.trim()
+          : typeof req.query.q === 'string'
+            ? req.query.q.trim()
+            : typeof req.query.orderNo === 'string'
+              ? req.query.orderNo.trim()
+              : '';
+      const startDate = parseDateQuery(req.query.startDate ?? req.query.start_date);
+      const endDate = parseDateQuery(req.query.endDate ?? req.query.end_date);
+
+      if (warehouseId != null && (!Number.isInteger(warehouseId) || warehouseId < 1)) {
+        return res.status(400).json({ error: 'warehouseId 无效' });
+      }
+      if (inventoryStatus && !INVENTORY_STATUS_KEYS.has(inventoryStatus)) {
+        return res.status(400).json({
+          error:
+            'inventoryStatus 须为 pending_audit | pending_outbound | outbounding | partial_outbound | fully_outbound',
+        });
+      }
 
       const whereParts = [];
       const params = [];
+      const needsMaterialJoin = !!keyword;
+
       if (materialId && Number.isInteger(materialId) && materialId > 0) {
         whereParts.push('io.material_id = ?');
         params.push(materialId);
+      }
+      if (warehouseId) {
+        whereParts.push('io.warehouse_id = ?');
+        params.push(warehouseId);
       }
       if (
         auditStatus === 'pending' ||
@@ -296,13 +349,37 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         whereParts.push('io.audit_status = ?');
         params.push(auditStatus);
       }
+      if (keyword) {
+        const like = `%${keyword}%`;
+        whereParts.push(
+          '(io.order_no LIKE ? OR m.code LIKE ? OR m.name LIKE ?)'
+        );
+        params.push(like, like, like);
+      }
+      if (startDate) {
+        whereParts.push('date(io.inbound_at) >= date(?)');
+        params.push(startDate);
+      }
+      if (endDate) {
+        whereParts.push('date(io.inbound_at) <= date(?)');
+        params.push(endDate);
+      }
+      if (inventoryStatus) {
+        const invSql = inboundInventoryStatusWhereClause(inventoryStatus);
+        if (invSql) whereParts.push(`(${invSql})`);
+      }
+
       const whereClause = whereParts.length
         ? ` WHERE ${whereParts.join(' AND ')}`
         : '';
+      const countFrom = needsMaterialJoin
+        ? `FROM inbound_orders io
+           JOIN materials m ON m.id = io.material_id`
+        : 'FROM inbound_orders io';
 
       const totalRow = await get(
         db,
-        `SELECT COUNT(*) AS c FROM inbound_orders io${whereClause}`,
+        `SELECT COUNT(*) AS c ${countFrom}${whereClause}`,
         params
       );
       const total = Number(totalRow?.c ?? 0);
@@ -315,8 +392,13 @@ export function registerInboundOrderRoutes(app, db, authMiddleware) {
         [...params, pageSize, offset]
       );
 
+      const ids = rows.map((r) => r.id);
+      const weightMap = await fetchInboundFifoWeightMap(db, ids);
+
       res.json({
-        orders: rows.map(mapInboundRow),
+        orders: rows
+          .map(mapInboundRow)
+          .map((o) => enrichInboundWithOutboundWeights(o, weightMap)),
         total,
         page,
         pageSize,
