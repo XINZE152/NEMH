@@ -1246,10 +1246,19 @@ body {
 }
 
 .warning-threshold,
-.deduction-mode {
+.deduction-mode,
+.warning-status-filter {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.warning-status-filter select {
+    min-width: 120px;
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
 }
 
 .warning-threshold input {
@@ -1894,13 +1903,13 @@ body {
     font-weight: 600;
 }
 
-/* 警告行 */
+/* 库存积压预警行 */
 .warning-row {
-    background: #fff5f5 !important;
+    background: #fff8e6 !important;
 }
 
 .warning-row:hover {
-    background: #ffeaea !important;
+    background: #fff3cd !important;
 }
 
 /* 表单组样式 */
@@ -2225,6 +2234,14 @@ body {
 
 .back-to-workbench-btn.btn-primary:hover {
     transform: translateY(-2px);
+}
+
+.workbench-dashboard {
+    margin-top: 28px;
+}
+
+.workbench-dashboard .dashboard-stats {
+    margin-bottom: 40px;
 }
 
 /* 工作台 */
