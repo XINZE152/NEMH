@@ -294,23 +294,33 @@
                     <button id="add-pricing-btn" class="btn-primary">
                         <i class="fas fa-plus"></i> 新增定价
                     </button>
-                    <div class="search-box">
-                        <input type="text" id="pricing-search" placeholder="搜索定价编号、品种代码或名称...">
-                        <button type="button" class="search-box-btn" id="pricing-search-btn" title="搜索" aria-label="搜索">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
                 </div>
                 
                 <div class="data-table-container">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>定价编号</th>
-                                <th>品种</th>
-                                <th>单价（元/吨）</th>
-                                <th>录入时间</th>
-                                <th>操作</th>
+                                <th class="sortable-th" data-sort="recordNo" scope="col">
+                                    <button type="button" class="sortable-th-btn" title="点击排序">
+                                        定价编号 <i class="sort-indicator fas fa-sort" aria-hidden="true"></i>
+                                    </button>
+                                </th>
+                                <th class="sortable-th" data-sort="material" scope="col">
+                                    <button type="button" class="sortable-th-btn" title="点击排序">
+                                        品种 <i class="sort-indicator fas fa-sort" aria-hidden="true"></i>
+                                    </button>
+                                </th>
+                                <th class="sortable-th" data-sort="price" scope="col">
+                                    <button type="button" class="sortable-th-btn" title="点击排序">
+                                        单价（元/吨） <i class="sort-indicator fas fa-sort" aria-hidden="true"></i>
+                                    </button>
+                                </th>
+                                <th class="sortable-th" data-sort="datetime" scope="col">
+                                    <button type="button" class="sortable-th-btn" title="点击排序">
+                                        录入时间 <i class="sort-indicator fas fa-sort" aria-hidden="true"></i>
+                                    </button>
+                                </th>
+                                <th scope="col">操作</th>
                             </tr>
                         </thead>
                         <tbody id="pricing-list">
