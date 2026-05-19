@@ -382,7 +382,41 @@
     enrichInboundOrdersFromFifo(appState);
   }
 
+  function isOutboundOrderCompleted(ob) {
+    if (!ob) return false;
+    if (ob.apiStatus === 'completed') return true;
+    if (ob.status === 'completed') return true;
+    return false;
+  }
+
+  /**
+   * 已出库 = 子单 actual 合计；
+   * 预出库 = 仅待完成出库单上尚未实际出库的预分配（pre − actual），已完成出库单不计预出库差额。
+   */
+  function sumInboundOutboundWeightsFromSubs(subs, outboundOrderById) {
+    let preOutboundWeight = 0;
+    let actualOutboundWeight = 0;
+    (subs || []).forEach(function (s) {
+      const pre = Number(s.preWeight) || 0;
+      const actual = Number(s.actualWeight) || 0;
+      actualOutboundWeight += actual;
+      const ob =
+        outboundOrderById && typeof outboundOrderById.get === 'function'
+          ? outboundOrderById.get(s.outboundOrderId)
+          : null;
+      if (!isOutboundOrderCompleted(ob)) {
+        preOutboundWeight += Math.max(0, pre - actual);
+      }
+    });
+    return { preOutboundWeight: preOutboundWeight, actualOutboundWeight: actualOutboundWeight };
+  }
+
   function enrichInboundOrdersFromFifo(appState) {
+    const outboundById = new Map(
+      (appState.outboundOrders || []).map(function (o) {
+        return [o.id, o];
+      })
+    );
     const subsByInbound = new Map();
     (appState.outboundSuborders || []).forEach(function (sub) {
       const iid = sub.inboundOrderId;
@@ -393,12 +427,9 @@
     appState.inboundOrders = (appState.inboundOrders || []).map(function (order) {
       if (order.status === 'rejected') return order;
       const subs = subsByInbound.get(order.id) || [];
-      let preOutboundWeight = 0;
-      let actualOutboundWeight = 0;
-      subs.forEach(function (s) {
-        preOutboundWeight += Number(s.preWeight) || 0;
-        actualOutboundWeight += Number(s.actualWeight) || 0;
-      });
+      const weights = sumInboundOutboundWeightsFromSubs(subs, outboundById);
+      const preOutboundWeight = weights.preOutboundWeight;
+      const actualOutboundWeight = weights.actualOutboundWeight;
       const weight = Number(order.weight) || 0;
       let status = 'approved';
       if (actualOutboundWeight >= weight && weight > 0) status = 'completed';
@@ -417,6 +448,8 @@
     mapLoginUser: mapLoginUser,
     login: login,
     refreshAppStateFromServer: refreshAppStateFromServer,
+    sumInboundOutboundWeightsFromSubs: sumInboundOutboundWeightsFromSubs,
+    enrichInboundOrdersFromFifo: enrichInboundOrdersFromFifo,
     apiFetch: apiFetch,
     splitCombinedImageUrls: splitCombinedImageUrls,
     createPurchasePrice: function (body) {
