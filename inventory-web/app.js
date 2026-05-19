@@ -343,12 +343,14 @@ function createDemoData() {
 
     normalizePricingRecords();
     normalizeInboundOrders();
+    recalculateInboundOrdersOutboundWeights();
     saveToLocalStorage();
 }
 
 // 保存到本地存储
 function saveToLocalStorage() {
     if (useApiMode()) return;
+    recalculateInboundOrdersOutboundWeights();
     const data = {
         users: AppState.users,
         roles: AppState.roles,
@@ -381,6 +383,7 @@ function loadFromLocalStorage() {
         AppState.actions = data.actions || [];
         normalizePricingRecords();
         normalizeInboundOrders();
+        recalculateInboundOrdersOutboundWeights();
     }
 }
 
@@ -559,7 +562,33 @@ function formatInboundTonShort(w, unit) {
     return `${text}${u}`;
 }
 
-/** 仅展示大于 0 的已出库/预出库吨数，用 · 连接 */
+/** 依 FIFO 子单从入库单重算已出库/预出库（已完成出库单不显示预出库差额） */
+function recalculateInboundOrdersOutboundWeights() {
+    if (useApiMode() || !window.InventoryApi?.sumInboundOutboundWeightsFromSubs) return;
+    const outboundById = new Map(
+        (AppState.outboundOrders || []).map((o) => [o.id, o])
+    );
+    const subsByInbound = new Map();
+    (AppState.outboundSuborders || []).forEach((sub) => {
+        const iid = sub.inboundOrderId;
+        if (iid == null) return;
+        if (!subsByInbound.has(iid)) subsByInbound.set(iid, []);
+        subsByInbound.get(iid).push(sub);
+    });
+    const sum = window.InventoryApi.sumInboundOutboundWeightsFromSubs;
+    AppState.inboundOrders = (AppState.inboundOrders || []).map((order) => {
+        if (order.status === 'rejected') return order;
+        const weights = sum(subsByInbound.get(order.id) || [], outboundById);
+        const weight = Number(order.weight) || 0;
+        let status = 'approved';
+        if (weights.actualOutboundWeight >= weight && weight > 0) status = 'completed';
+        else if (weights.actualOutboundWeight > 0) status = 'partial';
+        else if (weights.preOutboundWeight > 0) status = 'outbounding';
+        return Object.assign({}, order, weights, { status });
+    });
+}
+
+/** 仅展示大于 0 的已出库/预出库吨数，用 · 连接（pre 仅含待完成出库单的预分配） */
 function formatInboundOutboundWeightHint(actual, pre, unit) {
     const parts = [];
     const a = Number(actual) || 0;
@@ -569,33 +598,26 @@ function formatInboundOutboundWeightHint(actual, pre, unit) {
     return parts.join(' · ');
 }
 
-function inboundStatusBadgeHtml(orderOrStatus, unit) {
+function formatInboundOutboundWeightCell(w, unit) {
+    const n = Number(w) || 0;
+    if (n <= 0) return '-';
+    return formatInboundTonShort(n, unit);
+}
+
+function inboundStatusBadgeHtml(orderOrStatus) {
     const order = orderOrStatus && typeof orderOrStatus === 'object' ? orderOrStatus : null;
     const status = order ? order.status : orderOrStatus;
     const st = normalizeInboundFlowStatus(status);
-    const u = unit || '吨';
 
     switch (st) {
         case 'approved':
             return '<span class="badge badge-success">待出库</span>';
         case 'rejected':
             return '<span class="badge badge-danger">已驳回</span>';
-        case 'outbounding': {
-            const pre = order ? Number(order.preOutboundWeight) || 0 : 0;
-            if (pre > 0) {
-                return `<span class="badge badge-info">出库中</span><span class="inbound-status-extra">预出库 ${formatInboundTonShort(pre, u)}</span>`;
-            }
+        case 'outbounding':
             return '<span class="badge badge-info">出库中</span>';
-        }
-        case 'partial': {
-            const actual = order ? Number(order.actualOutboundWeight) || 0 : 0;
-            const pre = order ? Number(order.preOutboundWeight) || 0 : 0;
-            const hint = formatInboundOutboundWeightHint(actual, pre, u);
-            const extra = hint
-                ? `<span class="inbound-status-extra">${hint}</span>`
-                : '';
-            return `<span class="badge badge-secondary">部分已出库</span>${extra}`;
-        }
+        case 'partial':
+            return '<span class="badge badge-secondary">部分已出库</span>';
         case 'completed':
             return '<span class="badge badge-success">全部已出库</span>';
         default:
@@ -2333,7 +2355,15 @@ function loadInboundPage() {
         if (!material || !warehouse) return;
         
         const flowStatus = normalizeInboundFlowStatus(order.status);
-        const statusBadge = inboundStatusBadgeHtml(order, material.unit);
+        const statusBadge = inboundStatusBadgeHtml(order);
+        const actualOutCell = formatInboundOutboundWeightCell(
+            order.actualOutboundWeight,
+            material.unit
+        );
+        const preOutCell = formatInboundOutboundWeightCell(
+            order.preOutboundWeight,
+            material.unit
+        );
         const showMutate = canEditInboundOrder(order);
 
         const whLabel = `${warehouse.code} - ${warehouse.name}`;
@@ -2354,6 +2384,8 @@ function loadInboundPage() {
             <td>${order.weight} ${material.unit}</td>
             <td>${formatCurrency(order.unitPrice)}/${material.unit}</td>
             <td>${statusBadge}</td>
+            <td>${actualOutCell}</td>
+            <td>${preOutCell}</td>
             <td>${outboundPriceCell}</td>
             <td>${timeIn}</td>
             <td>
@@ -4428,7 +4460,7 @@ function renderWarningListEmptyRow(warningList, message) {
     )}</td></tr>`;
 }
 
-// 更新预警列表（列与 index.html 表头一致：库房、品种、总入库重量、待出库重量、预出库重量、扣减重量、可用库存、预警状态）
+// 更新预警列表（列与 index.html 表头一致：库房、品种、总入库重量、待出库重量、预出库重量、实际出库重量、可用库存、预警状态）
 function updateWarningList() {
     const warningList = document.getElementById('warning-list');
     if (!warningList) return;
@@ -4456,10 +4488,7 @@ function updateWarningList() {
                     const rem = Number(
                         it.remainingWeightByBasis != null ? it.remainingWeightByBasis : 0
                     );
-                    const deductTon =
-                        basis === 'actual'
-                            ? Number(it.actualOutboundWeight || 0)
-                            : Number(it.combinedOutboundDeductionWeight || 0);
+                    const actualOutTon = Number(it.actualOutboundWeight || 0);
                     const isOverstock = isInventoryOverstock(rem, threshold);
                     if (!matchesInventoryWarningStatusFilter(isOverstock, statusFilter)) return;
 
@@ -4472,7 +4501,7 @@ function updateWarningList() {
             <td>${Number(it.totalApprovedInboundWeight || 0).toFixed(2)} 吨</td>
             <td>${Number(it.waitingNotActuallyOutboundWeight || 0).toFixed(2)} 吨</td>
             <td>${Number(it.plannedOutboundWeight || 0).toFixed(2)} 吨</td>
-            <td>${deductTon.toFixed(2)} 吨</td>
+            <td>${actualOutTon.toFixed(2)} 吨</td>
             <td>${rem.toFixed(2)} 吨</td>
             <td>${inventoryWarningStatusBadgeHtml(isOverstock)}</td>
         `;
@@ -4494,8 +4523,8 @@ function updateWarningList() {
     const inventoryByMaterialWarehouse = {};
     
     AppState.inboundOrders.forEach((order) => {
-        if (order.status !== 'approved' && order.status !== 'outbounding') return;
-        
+        if (order.status === 'rejected') return;
+
         const key = `${order.materialId}-${order.warehouseId}`;
         if (!inventoryByMaterialWarehouse[key]) {
             inventoryByMaterialWarehouse[key] = {
@@ -4504,10 +4533,15 @@ function updateWarningList() {
                 totalInbound: 0,
                 pendingOutbound: 0,
                 totalPreOutbound: 0,
+                totalActualOutbound: 0,
                 totalAvailable: 0
             };
         }
         const agg = inventoryByMaterialWarehouse[key];
+
+        agg.totalActualOutbound += Number(order.actualOutboundWeight) || 0;
+
+        if (order.status !== 'approved' && order.status !== 'outbounding') return;
         
         agg.totalInbound += order.weight;
         agg.pendingOutbound += Math.max(0, order.weight - order.actualOutboundWeight);
@@ -4524,12 +4558,6 @@ function updateWarningList() {
         const warehouse = AppState.warehouses.find((w) => w.id === inventory.warehouseId);
         if (!material || !warehouse) return;
         
-        const deductionWeight =
-            deductionMode === 'both'
-                ? inventory.totalInbound - inventory.totalAvailable
-                : inventory.totalInbound -
-                  inventory.pendingOutbound -
-                  inventory.totalPreOutbound;
         const isOverstock = isInventoryOverstock(inventory.totalAvailable, threshold);
         if (!matchesInventoryWarningStatusFilter(isOverstock, statusFilter)) return;
 
@@ -4545,7 +4573,7 @@ function updateWarningList() {
             <td>${inventory.totalInbound.toFixed(2)} ${material.unit}</td>
             <td>${inventory.pendingOutbound.toFixed(2)} ${material.unit}</td>
             <td>${inventory.totalPreOutbound.toFixed(2)} ${material.unit}</td>
-            <td>${deductionWeight.toFixed(2)} ${material.unit}</td>
+            <td>${(inventory.totalActualOutbound || 0).toFixed(2)} ${material.unit}</td>
             <td>${inventory.totalAvailable.toFixed(2)} ${material.unit}</td>
             <td>${inventoryWarningStatusBadgeHtml(isOverstock)}</td>
         `;
