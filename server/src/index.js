@@ -20,6 +20,7 @@ import { registerInboundOrderRoutes } from './inboundOrders.js';
 import { registerInventoryAlertRoutes } from './inventoryAlerts.js';
 import { registerOutboundOrderRoutes } from './outboundOrders.js';
 import { registerProfitReportRoutes } from './profitReport.js';
+import { registerInboundReportRoutes } from './inboundReport.js';
 import { registerWarehouseStockReportRoutes } from './inventoryWarehouseReport.js';
 import { registerWarehouseRoutes } from './warehouses.js';
 import { registerPublicRegisterRoute } from './publicRegister.js';
@@ -134,6 +135,7 @@ async function main() {
   registerInventoryAlertRoutes(app, db, authMiddleware);
   registerOutboundOrderRoutes(app, db, authMiddleware);
   registerProfitReportRoutes(app, db, authMiddleware);
+  registerInboundReportRoutes(app, db, authMiddleware);
   registerWarehouseStockReportRoutes(app, db, authMiddleware);
   logAuthHint();
 

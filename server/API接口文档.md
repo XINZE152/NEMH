@@ -323,9 +323,28 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `GET /api/admin/inbound-orders`
 
-**Query：** `page`, `pageSize`（≤100）, `materialId`, `auditStatus`（`pending` | `approved` | `rejected`）。
+**Query：**
 
-**响应：** `{ "orders": [...], "total", "page", "pageSize" }`。单条含 `auditStatusText`, `varietyName`, `price`, `inboundPhoto`, `inboundTime`, `latestUnifiedQuote` 等。
+| 参数 | 说明 |
+|------|------|
+| `page` | 默认 1 |
+| `pageSize` | 默认 10，最大 100 |
+| `materialId` | 可选，按品种 |
+| `warehouseId` / `warehouse_id` | 可选，按库房 |
+| `auditStatus` | 可选：`pending` \| `approved` \| `rejected` |
+| `inventoryStatus` / `inventory_status` | 可选：`pending_audit` \| `pending_outbound` \| `outbounding` \| `partial_outbound` \| `fully_outbound`（与库存报表一致） |
+| `keyword` / `q` / `orderNo` | 可选，入库单号或品种编码/名称模糊搜索 |
+| `startDate` / `start_date` | 可选，`YYYY-MM-DD`，入库日期起 |
+| `endDate` / `end_date` | 可选，`YYYY-MM-DD`，入库日期止 |
+
+**响应：** `{ "orders": [...], "total", "page", "pageSize" }`。单条除 `auditStatusText`, `varietyName`, `price`, `inboundPhoto`, `inboundTime`, `latestUnifiedQuote` 外，还含：
+
+| 字段 | 说明 |
+|------|------|
+| `actualOutboundWeight` | 已完成实际出库合计（FIFO） |
+| `preOutboundWeight` / `unfulfilledPlannedWeight` | 有出库计划尚未实际出库的占用 |
+| `availableWeight` | 入库重量 − 实际出库 − 预出库占用 |
+| `inventoryStatus` / `inventoryStatusLabel` | 库存流转状态 key 与中文 |
 
 ### `GET /api/admin/inbound-orders/:id`
 
@@ -391,6 +410,8 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **Query：** `page`, `pageSize`（≤100）, `materialId`, `status`（`pending` | `completed`）。
 
+列表与详情单条另含 `unfulfilledPlannedWeight` / `preOutboundWeight`（待完成单 = 计划重量 − 已实际出库）、`totalPlannedWeight`（未出库计划 + 已实际出库）。
+
 ### `GET /api/admin/outbound-orders/:id`
 
 含 `fifoLines`（先进先出子行，含 `inboundAt`、`inboundUnitPrice`、`actualWeight`、`plannedWeight`）；`completedAt` / `outboundTime`（已完成时为 `updatedAt`，含时分秒）；已完成单含 `salesRevenue`（实际重量×出库单价）；另含 `defaultOutboundUnitPrice`。
@@ -423,24 +444,29 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 ### `GET /api/admin/inbound-summary-alerts`
 
-入库汇总预警（库房 + 品种维度）。出库占用重量从 **`outbound_orders` 实时汇总**（与 FIFO 一致），不读 `warehouse_material_outbound` 缓存表。
+入库汇总预警（库房 + 品种维度）。出库占用从 **`outbound_fifo_lines` + `outbound_orders`** 汇总（与 FIFO 一致）。
 
 **Query：**
 
 | 参数 | 说明 |
 |------|------|
-| `basis` | `actual` 或 `combined`（默认 `combined`） |
+| `basis` | `actual` 或 `combined`（默认 `combined`），仅影响 **可用库存** `remainingWeightByBasis` |
 | `thresholdTon` / `threshold_ton` | 正数，默认 `30`（吨） |
-| `onlyThirtyTonReminder` / `only_thirty_ton_reminder` | `1` 或 `true` 时仅返回累计已审核入库 ≥ 阈值的项 |
+| `alertStatus` / `alert_status` / `warningStatus` | `overstock`（仅囤积）\| `normal`（仅正常）\| `all`（默认） |
+| `onlyThirtyTonReminder` / `only_thirty_ton_reminder` | `1` 或 `true` 时仅返回 **累计入库 ≥ 阈值** 的项（统计提醒，非囤积预警） |
+| `includeReport` / `include_report` | `1` 或 `true` 时响应附带 `report` 汇总块 |
 
-**`basis` 扣减规则：**
+**囤积预警规则：** `isOverstockAlert` = 可用库存 **严格大于** `thresholdTon`（`>`）；`alertStatus` 为 `overstock` 或 `normal`。
 
-| `basis` | 扣减重量 | 可用库存（`remainingWeightByBasis`） |
-|---------|----------|--------------------------------------|
-| `combined` | 已完成 **实际出库** + 待完成 **预出库**（完成出库后预出库回滚，不与实际重复） | 总入库 − 扣减 |
-| `actual` | 仅 **实际出库** | 总入库 − 实际出库 |
+**`basis` 与展示：**
 
-**响应：** `basis`, `defaultBasis`, `combinedRuleDescription`, `thresholdTon`, `onlyThirtyTonReminder`, `hasInboundTonReminder`, `items`（含 `deductionWeightByBasis`, `combinedOutboundDeductionWeight`, `remainingWeightByBasis` 等）。
+| 项 | 说明 |
+|----|------|
+| `deductionWeight` / `deductionWeightDisplay` | 固定为 **实际出库重量**（列表展示用） |
+| `remainingWeightByBasis` | `combined`：总入库 − 实际 − 未出库预出库；`actual`：总入库 − 实际出库 |
+| `preOutboundWeight` / `unfulfilledPlannedWeight` | 有出库计划尚未实际出库的占用（FIFO 行计划−实际） |
+
+**响应：** `basis`, `defaultBasis`, `combinedRuleDescription`, `overstockRuleDescription`, `thresholdTon`, `alertStatusFilter`, `onlyThirtyTonReminder`, `hasInboundTonReminder`, `hasOverstockAlert`, `items`（含 `isOverstockAlert`, `overstockExcessTon`, `deductionWeight` 等），可选 `report`（`overstockCount`, `totalExcessOverThresholdTon` 等）。
 
 ### `GET /api/admin/inventory/available-stock`
 
@@ -448,7 +474,15 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **Query（必填）：** `warehouseId` / `warehouse_id`, `materialId` / `material_id`
 
-**响应：** `availableWeight`, `totalApprovedInboundWeight`, `actualOutboundWeight`, `plannedOutboundWeight`, `combinedOutboundDeductionWeight`, `remainingByCombinedBasis`, `remainingByActualBasis`, `fifoLines`（每行 `inboundOrderId`, `availableWeight` 等）。
+**响应：** `availableWeight`, `totalApprovedInboundWeight`, `actualOutboundWeight`, `unfulfilledPlannedWeight` / `preOutboundWeight`, `deductionWeight`（= 实际出库）, `combinedOutboundDeductionWeight`, `remainingByCombinedBasis`, `remainingByActualBasis`, `fifoLines`（每行 `inboundOrderId`, `availableWeight` 等）。
+
+### `GET /api/admin/reports/inbound-summary`
+
+入库统计报表：按 **已审核** 入库单聚合（`inbound_at` 日期筛选）。
+
+**Query（均可选）：** `startDate` / `start_date`, `endDate` / `end_date`, `warehouseId`, `materialId`, `groupBy` / `group_by`：`warehouse_material`（默认，按库房+品种）或 `material`（仅品种）
+
+**响应：** `inboundAtBasis`, `groupBy`, `totals`（`inboundOrderCount`, `inboundWeight`, `inboundAmount`）, `items`（每行含 `warehouse`（groupBy=material 时为 null）、`material`、同上三项指标）。
 
 ### `GET /api/admin/reports/profit-summary`
 
