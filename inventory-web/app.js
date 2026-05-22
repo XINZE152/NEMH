@@ -747,23 +747,7 @@ function setupEventListeners() {
     
     // 收货定价相关
     document.getElementById('add-pricing-btn').addEventListener('click', showAddPricingModal);
-    const pricingSearch = document.getElementById('pricing-search');
-    if (pricingSearch) {
-        pricingSearch.addEventListener('input', filterPricingList);
-        pricingSearch.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') filterPricingList();
-        });
-    }
-    const pricingSearchBtn = document.getElementById('pricing-search-btn');
-    if (pricingSearchBtn) {
-        pricingSearchBtn.addEventListener('click', function () {
-            const input = document.getElementById('pricing-search');
-            if (input) {
-                input.focus();
-                filterPricingList();
-            }
-        });
-    }
+    initPricingTableSort();
     initImageLightbox();
     const pricingMarketInput = document.getElementById('pricing-market-image');
     if (pricingMarketInput) {
@@ -1536,6 +1520,93 @@ function formatPricingRecordNo(record) {
     return id !== '' ? `PP-${String(id).padStart(4, '0')}` : '-';
 }
 
+/** 收货定价列表表头排序：key 为 recordNo | material | price | datetime */
+const pricingTableSort = { key: null, dir: 'asc' };
+
+function getPricingRecordSortValue(record, key) {
+    const material = AppState.materials.find((m) => m.id === record.materialId);
+    switch (key) {
+        case 'recordNo':
+            return Number(record.id) || 0;
+        case 'material':
+            return material ? `${material.code}\t${material.name}` : '';
+        case 'price':
+            return Number(record.price) || 0;
+        case 'datetime':
+            return pricingRecordSortTime(record);
+        default:
+            return 0;
+    }
+}
+
+function comparePricingRecords(a, b, key, dir) {
+    const va = getPricingRecordSortValue(a, key);
+    const vb = getPricingRecordSortValue(b, key);
+    let cmp = 0;
+    if (typeof va === 'number' && typeof vb === 'number') {
+        cmp = va - vb;
+    } else {
+        cmp = String(va).localeCompare(String(vb), 'zh-Hans-CN', { numeric: true });
+    }
+    if (cmp === 0) {
+        cmp = (Number(a.id) || 0) - (Number(b.id) || 0);
+    }
+    return dir === 'desc' ? -cmp : cmp;
+}
+
+function getSortedPricingRecordsForList() {
+    const records = AppState.pricingRecords.filter((r) =>
+        AppState.materials.some((m) => m.id === r.materialId)
+    );
+    if (!pricingTableSort.key) return records;
+    return [...records].sort((a, b) =>
+        comparePricingRecords(a, b, pricingTableSort.key, pricingTableSort.dir)
+    );
+}
+
+function updatePricingSortableHeaders() {
+    document.querySelectorAll('#pricing-page .sortable-th[data-sort]').forEach((th) => {
+        const key = th.dataset.sort;
+        const btn = th.querySelector('.sortable-th-btn');
+        const icon = th.querySelector('.sort-indicator');
+        const active = pricingTableSort.key === key;
+        th.classList.toggle('sort-active', active);
+        if (icon) {
+            icon.className =
+                'sort-indicator fas ' +
+                (!active ? 'fa-sort' : pricingTableSort.dir === 'asc' ? 'fa-sort-up' : 'fa-sort-down');
+        }
+        if (btn) {
+            btn.setAttribute(
+                'aria-sort',
+                active ? (pricingTableSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
+            );
+        }
+    });
+}
+
+function onPricingHeaderSortClick(sortKey) {
+    if (pricingTableSort.key === sortKey) {
+        pricingTableSort.dir = pricingTableSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        pricingTableSort.key = sortKey;
+        pricingTableSort.dir = 'asc';
+    }
+    loadPricingPage();
+}
+
+function initPricingTableSort() {
+    document.querySelectorAll('#pricing-page .sortable-th[data-sort]').forEach((th) => {
+        const key = th.dataset.sort;
+        const btn = th.querySelector('.sortable-th-btn');
+        if (!key || !btn || btn.dataset.sortBound === '1') return;
+        btn.dataset.sortBound = '1';
+        btn.addEventListener('click', function () {
+            onPricingHeaderSortClick(key);
+        });
+    });
+}
+
 /** 出库历史：汇总 FIFO 关联的入库单号（去重，顿号分隔） */
 /** 出库历史：入库单号及本单 FIFO 扣减吨数，如 RK-20260516-1447(20吨) */
 function formatOutboundInboundOrderNos(outboundOrderId, unit) {
@@ -2000,12 +2071,13 @@ function loadPricingPage() {
     if (AppState.pricingRecords.length === 0) {
         pricingList.innerHTML =
             '<tr><td colspan="5" style="text-align: center; color: #999;">暂无数据</td></tr>';
+        updatePricingSortableHeaders();
         return;
     }
 
     const canMutatePricing = !useApiMode() || isWarehouseApiRoleOrSuperAdmin();
 
-    AppState.pricingRecords.forEach((record) => {
+    getSortedPricingRecordsForList().forEach((record) => {
         const material = AppState.materials.find((m) => m.id === record.materialId);
         if (!material) return;
 
@@ -2021,16 +2093,6 @@ function loadPricingPage() {
             : '';
 
         const row = document.createElement('tr');
-        const searchText = [
-            formatPricingRecordNo(record),
-            String(record.id),
-            material.code,
-            material.name,
-            record.note || '',
-        ]
-            .join(' ')
-            .toLowerCase();
-        row.dataset.search = searchText;
         row.innerHTML = `
             <td>${formatPricingRecordNo(record)}</td>
             <td>${material.code} - ${material.name}</td>
@@ -2045,24 +2107,7 @@ function loadPricingPage() {
         `;
         pricingList.appendChild(row);
     });
-    filterPricingList();
-}
-
-// 过滤定价列表
-function filterPricingList() {
-    const input = document.getElementById('pricing-search');
-    const searchTerm = (input ? input.value : '').trim().toLowerCase();
-    const rows = document.querySelectorAll('#pricing-list tr');
-    
-    rows.forEach((row) => {
-        if (!searchTerm) {
-            row.style.display = '';
-            return;
-        }
-        const haystack =
-            row.dataset.search || row.textContent.toLowerCase();
-        row.style.display = haystack.includes(searchTerm) ? '' : 'none';
-    });
+    updatePricingSortableHeaders();
 }
 
 // 显示新增定价模态框

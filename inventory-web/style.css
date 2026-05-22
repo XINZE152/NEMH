@@ -986,6 +986,47 @@ body {
     border-bottom: 2px solid #e9ecef;
 }
 
+.data-table th.sortable-th {
+    padding: 0;
+}
+
+.sortable-th-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+    padding: 16px;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable-th-btn:hover {
+    background: #eef1f4;
+    color: #2c3e50;
+}
+
+.data-table th.sortable-th.sort-active .sortable-th-btn {
+    color: #3498db;
+}
+
+.sort-indicator {
+    font-size: 0.75em;
+    opacity: 0.45;
+    flex-shrink: 0;
+}
+
+.data-table th.sortable-th.sort-active .sort-indicator {
+    opacity: 1;
+    color: #3498db;
+}
+
 .data-table td {
     padding: 16px;
     border-bottom: 1px solid #e9ecef;
