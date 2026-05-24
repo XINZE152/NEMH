@@ -24,9 +24,6 @@ const AppState = {
     tempInboundImages: []
 };
 
-/** 库房编辑弹窗：非 null 表示正在编辑的库房 id */
-let editingWarehouseId = null;
-
 /** 是否对接后端（与 inventory-api.js、index.html 中 __USE_BACKEND_API__ 一致） */
 function useApiMode() {
     return typeof window !== 'undefined' && window.InventoryApi && window.InventoryApi.useApiMode();
@@ -772,11 +769,6 @@ function setupEventListeners() {
     }
     document.getElementById('inbound-status-filter').addEventListener('change', filterInboundList);
 
-    const addWarehouseBtn = document.getElementById('add-warehouse-btn');
-    if (addWarehouseBtn) {
-        addWarehouseBtn.addEventListener('click', showAddWarehouseModal);
-    }
-    
     // 出库管理：创建预出库计划
     document.getElementById('add-pre-outbound-btn').addEventListener('click', showAddOutboundModal);
 
@@ -809,6 +801,7 @@ function setupEventListeners() {
     // 报表相关
     document.getElementById('generate-report-btn').addEventListener('click', generateProfitReport);
     document.getElementById('export-report-btn').addEventListener('click', exportReportToExcel);
+    initProfitReportPagination();
     
     // 回车键登录
     document.getElementById('password').addEventListener('keypress', function(e) {
@@ -3012,26 +3005,13 @@ function deleteInbound(id) {
     addAction('inbound', `删除入库单 ${order.orderNo}`);
 }
 
-function warehouseDeleteBlockReason(warehouseId) {
-    if (AppState.inboundOrders.some((o) => o.warehouseId === warehouseId)) {
-        return '该库房下仍存在入库单记录，无法删除。';
-    }
-    if (AppState.outboundOrders.some((o) => o.warehouseId === warehouseId)) {
-        return '该库房下仍存在出库单记录，无法删除。';
-    }
-    if (!useApiMode() && AppState.users.some((u) => u.warehouseId === warehouseId)) {
-        return '仍有用户绑定该库房，无法删除。';
-    }
-    return '';
-}
-
 function loadWarehousePage() {
     const list = document.getElementById('warehouse-list');
     if (!list) return;
     list.innerHTML = '';
     if (!AppState.warehouses.length) {
         list.innerHTML =
-            '<tr><td colspan="4" style="text-align: center; color: #999;">暂无库房数据</td></tr>';
+            '<tr><td colspan="3" style="text-align: center; color: #999;">暂无库房数据</td></tr>';
         return;
     }
     AppState.warehouses.forEach((w) => {
@@ -3040,179 +3020,9 @@ function loadWarehousePage() {
             <td>${w.code}</td>
             <td>${w.name}</td>
             <td>${w.address || '-'}</td>
-            <td>
-                <button type="button" class="btn btn-sm btn-icon" onclick="editWarehouse(${w.id})" title="编辑">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button type="button" class="btn btn-sm btn-icon btn-danger" onclick="deleteWarehouse(${w.id})" title="删除">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
         `;
         list.appendChild(row);
     });
-}
-
-function resetWarehouseForm() {
-    const c = document.getElementById('warehouse-code');
-    const n = document.getElementById('warehouse-name');
-    const a = document.getElementById('warehouse-address');
-    if (c) c.value = '';
-    if (n) n.value = '';
-    if (a) a.value = '';
-}
-
-function showAddWarehouseModal() {
-    const modal = document.getElementById('add-warehouse-modal');
-    if (!modal) return;
-    editingWarehouseId = null;
-    resetWarehouseForm();
-    const title = document.getElementById('warehouse-modal-title');
-    if (title) title.innerHTML = '<i class="fas fa-warehouse"></i> 新建库房';
-    const saveBtn = modal.querySelector('.modal-footer .btn-primary');
-    if (saveBtn) saveBtn.textContent = '保存';
-    openModal(modal);
-}
-
-function editWarehouse(id) {
-    const w = AppState.warehouses.find((x) => x.id === id);
-    if (!w) return;
-    const modal = document.getElementById('add-warehouse-modal');
-    if (!modal) return;
-    editingWarehouseId = id;
-    const c = document.getElementById('warehouse-code');
-    const n = document.getElementById('warehouse-name');
-    const a = document.getElementById('warehouse-address');
-    if (c) c.value = w.code;
-    if (n) n.value = w.name;
-    if (a) a.value = w.address || '';
-    const title = document.getElementById('warehouse-modal-title');
-    if (title) title.innerHTML = '<i class="fas fa-warehouse"></i> 编辑库房';
-    const saveBtn = modal.querySelector('.modal-footer .btn-primary');
-    if (saveBtn) saveBtn.textContent = '保存修改';
-    openModal(modal);
-}
-
-function submitWarehouseForm() {
-    if (editingWarehouseId != null) {
-        updateWarehouseRecord();
-    } else {
-        saveWarehouseRecord();
-    }
-}
-
-function saveWarehouseRecord() {
-    const code = document.getElementById('warehouse-code')?.value.trim() || '';
-    const name = document.getElementById('warehouse-name')?.value.trim() || '';
-    const address = document.getElementById('warehouse-address')?.value.trim() || '';
-    if (!code || !name) {
-        showMessage('请填写库房代码与名称', 'error');
-        return;
-    }
-    if (!useApiMode() && !address) {
-        showMessage('请填写完整库房信息', 'error');
-        return;
-    }
-    if (useApiMode()) {
-        void (async function () {
-            try {
-                await window.InventoryApi.createWarehouse({ code: code, name: name, address: address });
-                await window.InventoryApi.refreshAppStateFromServer(AppState);
-                closeModal('add-warehouse-modal');
-                loadWarehousePage();
-                showMessage(`已新建库房 ${name}`, 'success');
-                addAction('warehouse', `新建库房 ${code}（API）`);
-            } catch (e) {
-                showMessage(e.message || '创建失败', 'error');
-            }
-        })();
-        return;
-    }
-    if (AppState.warehouses.some((w) => w.code === code)) {
-        showMessage('库房代码已存在', 'error');
-        return;
-    }
-    const id = AppState.warehouses.length ? Math.max(...AppState.warehouses.map((w) => w.id)) + 1 : 1;
-    AppState.warehouses.push({ id, code, name, address });
-    saveToLocalStorage();
-    closeModal('add-warehouse-modal');
-    loadWarehousePage();
-    showMessage(`已新建库房 ${name}`, 'success');
-    addAction('warehouse', `新建库房 ${code} - ${name}`);
-}
-
-function updateWarehouseRecord() {
-    const id = editingWarehouseId;
-    if (id == null) return;
-    const code = document.getElementById('warehouse-code')?.value.trim() || '';
-    const name = document.getElementById('warehouse-name')?.value.trim() || '';
-    const address = document.getElementById('warehouse-address')?.value.trim() || '';
-    if (!code || !name) {
-        showMessage('请填写库房代码与名称', 'error');
-        return;
-    }
-    if (!useApiMode() && !address) {
-        showMessage('请填写完整库房信息', 'error');
-        return;
-    }
-    if (useApiMode()) {
-        void (async function () {
-            try {
-                await window.InventoryApi.updateWarehouse(id, { code: code, name: name, address: address });
-                await window.InventoryApi.refreshAppStateFromServer(AppState);
-                editingWarehouseId = null;
-                closeModal('add-warehouse-modal');
-                loadWarehousePage();
-                showMessage('已更新库房', 'success');
-            } catch (e) {
-                showMessage(e.message || '更新失败', 'error');
-            }
-        })();
-        return;
-    }
-    if (AppState.warehouses.some((w) => w.code === code && w.id !== id)) {
-        showMessage('库房代码已存在', 'error');
-        return;
-    }
-    const idx = AppState.warehouses.findIndex((w) => w.id === id);
-    if (idx === -1) return;
-    const { capacity: _dropCap, ...restWh } = AppState.warehouses[idx];
-    AppState.warehouses[idx] = { ...restWh, code, name, address };
-    saveToLocalStorage();
-    closeModal('add-warehouse-modal');
-    loadWarehousePage();
-    editingWarehouseId = null;
-    showMessage('库房信息已更新', 'success');
-    addAction('warehouse', `更新库房 ${code} - ${name}`);
-}
-
-function deleteWarehouse(id) {
-    const w = AppState.warehouses.find((x) => x.id === id);
-    if (!w) return;
-    const reason = warehouseDeleteBlockReason(id);
-    if (reason) {
-        showMessage(reason, 'error');
-        return;
-    }
-    if (!confirm(`确定删除库房「${w.name}」（${w.code}）吗？此操作不可恢复。`)) return;
-    if (useApiMode()) {
-        void (async function () {
-            try {
-                await window.InventoryApi.deleteWarehouse(id);
-                await window.InventoryApi.refreshAppStateFromServer(AppState);
-                loadWarehousePage();
-                showMessage('已删除库房', 'success');
-            } catch (e) {
-                showMessage(e.message || '删除失败', 'error');
-            }
-        })();
-        return;
-    }
-    AppState.warehouses = AppState.warehouses.filter((x) => x.id !== id);
-    saveToLocalStorage();
-    loadWarehousePage();
-    showMessage('已删除库房', 'success');
-    addAction('warehouse', `删除库房 ${w.code} - ${w.name}`);
 }
 
 // 打开模态框（居中、无灰底遮罩）
@@ -3251,14 +3061,6 @@ function closeModal(modalId) {
         }
     }
 
-    if (modalId === 'add-warehouse-modal' && modal) {
-        editingWarehouseId = null;
-        resetWarehouseForm();
-        const title = document.getElementById('warehouse-modal-title');
-        if (title) title.innerHTML = '<i class="fas fa-warehouse"></i> 新建库房';
-        const saveBtnWh = modal.querySelector('.modal-footer .btn-primary');
-        if (saveBtnWh) saveBtnWh.textContent = '保存';
-    }
 }
 
 // 加载对外报价页面
@@ -4933,6 +4735,129 @@ function parseReportDayToTime(dateStr) {
     return Number.isNaN(t) ? null : t;
 }
 
+/** 报表中心：筛选后的全部汇总行 + 分页状态 */
+const profitReportPagination = {
+    rows: [],
+    page: 1,
+    pageSize: 20
+};
+
+function initProfitReportPagination() {
+    const pageSizeEl = document.getElementById('profit-report-page-size');
+    const prevBtn = document.getElementById('profit-report-prev');
+    const nextBtn = document.getElementById('profit-report-next');
+    if (pageSizeEl) {
+        pageSizeEl.value = String(profitReportPagination.pageSize);
+        pageSizeEl.addEventListener('change', () => {
+            profitReportPagination.pageSize = parseInt(pageSizeEl.value, 10) || 20;
+            profitReportPagination.page = 1;
+            renderProfitReportTablePage();
+        });
+    }
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (profitReportPagination.page > 1) {
+                profitReportPagination.page -= 1;
+                renderProfitReportTablePage();
+            }
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            const totalPages = getProfitReportTotalPages();
+            if (profitReportPagination.page < totalPages) {
+                profitReportPagination.page += 1;
+                renderProfitReportTablePage();
+            }
+        });
+    }
+}
+
+function getProfitReportTotalPages() {
+    const total = profitReportPagination.rows.length;
+    if (total === 0) return 1;
+    return Math.ceil(total / profitReportPagination.pageSize);
+}
+
+function buildProfitReportRowData(profit, material) {
+    const profitMargin =
+        profit.salesRevenue > 0 ? ((profit.profit / profit.salesRevenue) * 100).toFixed(2) : '0.00';
+    const avgSalePrice = profit.salesWeight > 0 ? profit.salesRevenue / profit.salesWeight : 0;
+    const salesWeightText = `${profit.salesWeight.toFixed(2)} ${material.unit}`;
+    const avgPriceText = `${formatCurrency(avgSalePrice)}/${material.unit}`;
+    return {
+        sortKey: `${getWarehouseLabel(profit.warehouseId)}|${material.code}`,
+        warehouseLabel: getWarehouseLabel(profit.warehouseId),
+        materialCode: material.code,
+        materialName: material.name,
+        salesWeightText,
+        avgPriceText,
+        revenueText: formatCurrency(profit.salesRevenue),
+        costText: formatCurrency(profit.cost),
+        profitText: formatCurrency(profit.profit),
+        marginText: `${profitMargin}%`,
+        salesRevenue: profit.salesRevenue,
+        cost: profit.cost,
+        profit: profit.profit
+    };
+}
+
+function renderProfitReportTablePage() {
+    const tbody = document.getElementById('profit-report-list');
+    if (!tbody) return;
+
+    const { rows, page, pageSize } = profitReportPagination;
+    const total = rows.length;
+    const totalPages = getProfitReportTotalPages();
+
+    if (total === 0) {
+        tbody.innerHTML =
+            '<tr><td colspan="9" style="text-align: center; color: #999;">暂无数据，请调整筛选条件后生成报表</td></tr>';
+    } else {
+        if (page > totalPages) profitReportPagination.page = totalPages;
+        const safePage = profitReportPagination.page;
+        const start = (safePage - 1) * pageSize;
+        const pageRows = rows.slice(start, start + pageSize);
+        tbody.innerHTML = pageRows
+            .map(
+                (r) => `
+            <tr>
+            <td>${r.warehouseLabel}</td>
+            <td>${r.materialCode}</td>
+            <td>${r.materialName}</td>
+            <td>${r.salesWeightText}</td>
+            <td>${r.avgPriceText}</td>
+            <td>${r.revenueText}</td>
+            <td>${r.costText}</td>
+            <td>${r.profitText}</td>
+            <td>${r.marginText}</td>
+        `
+            )
+            .join('');
+    }
+
+    const infoEl = document.getElementById('profit-report-pagination-info');
+    const indicatorEl = document.getElementById('profit-report-page-indicator');
+    const prevBtn = document.getElementById('profit-report-prev');
+    const nextBtn = document.getElementById('profit-report-next');
+    const currentPage = total === 0 ? 1 : profitReportPagination.page;
+
+    if (infoEl) {
+        if (total === 0) {
+            infoEl.textContent = '共 0 条';
+        } else {
+            const from = (currentPage - 1) * pageSize + 1;
+            const to = Math.min(currentPage * pageSize, total);
+            infoEl.textContent = `共 ${total} 条，当前显示第 ${from}–${to} 条`;
+        }
+    }
+    if (indicatorEl) {
+        indicatorEl.textContent = `第 ${currentPage} / ${totalPages} 页`;
+    }
+    if (prevBtn) prevBtn.disabled = total === 0 || currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = total === 0 || currentPage >= totalPages;
+}
+
 // 加载报表中心页面
 function loadReportsPage() {
     fillProfitReportFilters();
@@ -4948,7 +4873,7 @@ function loadReportsPage() {
     generateProfitReport();
 }
 
-// 生成利润报表（写入 #profit-report-list，支持日期/品种/库房筛选）
+// 生成利润报表（支持日期/品种/库房筛选与分页展示）
 function generateProfitReport() {
     try {
         const tbody = document.getElementById('profit-report-list');
@@ -4956,7 +4881,6 @@ function generateProfitReport() {
             showMessage('未找到利润报表表格', 'error');
             return;
         }
-        tbody.innerHTML = '';
 
         const startVal = document.getElementById('report-start-date')?.value || '';
         const endVal = document.getElementById('report-end-date')?.value || '';
@@ -4978,58 +4902,55 @@ function generateProfitReport() {
             return true;
         });
 
-        const profitByMaterial = {};
+        const profitByMaterialWarehouse = {};
 
         completedOutbounds.forEach((order) => {
             const materialId = order.materialId;
+            const warehouseId = order.warehouseId;
+            const key = `${materialId}-${warehouseId}`;
             const actualW = Number(order.actualWeight) || 0;
             const price = Number(order.price) || 0;
-            if (!profitByMaterial[materialId]) {
-                profitByMaterial[materialId] = {
-                    materialId: materialId,
+            if (!profitByMaterialWarehouse[key]) {
+                profitByMaterialWarehouse[key] = {
+                    materialId,
+                    warehouseId,
                     salesWeight: 0,
                     salesRevenue: 0,
                     cost: 0,
                     profit: 0
                 };
             }
-            profitByMaterial[materialId].salesWeight += actualW;
-            profitByMaterial[materialId].salesRevenue += actualW * price;
-            profitByMaterial[materialId].cost += allocateOutboundOrderCost(order);
-            profitByMaterial[materialId].profit =
-                profitByMaterial[materialId].salesRevenue - profitByMaterial[materialId].cost;
+            profitByMaterialWarehouse[key].salesWeight += actualW;
+            profitByMaterialWarehouse[key].salesRevenue += actualW * price;
+            profitByMaterialWarehouse[key].cost += allocateOutboundOrderCost(order);
+            profitByMaterialWarehouse[key].profit =
+                profitByMaterialWarehouse[key].salesRevenue - profitByMaterialWarehouse[key].cost;
         });
 
         let totalSalesRevenue = 0;
         let totalCost = 0;
         let totalProfit = 0;
+        const reportRows = [];
 
-        Object.values(profitByMaterial).forEach((profit) => {
+        Object.values(profitByMaterialWarehouse).forEach((profit) => {
             const material = AppState.materials.find((m) => m.id === profit.materialId);
             if (!material) return;
 
-            const profitMargin =
-                profit.salesRevenue > 0 ? ((profit.profit / profit.salesRevenue) * 100).toFixed(2) : '0.00';
-            const avgSalePrice =
-                profit.salesWeight > 0 ? profit.salesRevenue / profit.salesWeight : 0;
-
-            const row = document.createElement('tr');
-            row.innerHTML = `
-            <td>${material.code}</td>
-            <td>${material.name}</td>
-            <td>${profit.salesWeight.toFixed(2)} ${material.unit}</td>
-            <td>${formatCurrency(avgSalePrice)}/${material.unit}</td>
-            <td>${formatCurrency(profit.salesRevenue)}</td>
-            <td>${formatCurrency(profit.cost)}</td>
-            <td>${formatCurrency(profit.profit)}</td>
-            <td>${profitMargin}%</td>
-        `;
-            tbody.appendChild(row);
-
-            totalSalesRevenue += profit.salesRevenue;
-            totalCost += profit.cost;
-            totalProfit += profit.profit;
+            const rowData = buildProfitReportRowData(profit, material);
+            reportRows.push(rowData);
+            totalSalesRevenue += rowData.salesRevenue;
+            totalCost += rowData.cost;
+            totalProfit += rowData.profit;
         });
+
+        reportRows.sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'zh-CN'));
+
+        const pageSizeEl = document.getElementById('profit-report-page-size');
+        profitReportPagination.rows = reportRows;
+        profitReportPagination.page = 1;
+        profitReportPagination.pageSize = pageSizeEl
+            ? parseInt(pageSizeEl.value, 10) || 20
+            : profitReportPagination.pageSize;
 
         setElementText('total-sales', formatCurrency(totalSalesRevenue));
         setElementText('total-cost', formatCurrency(totalCost));
@@ -5039,35 +4960,44 @@ function generateProfitReport() {
             totalSalesRevenue > 0 ? ((totalProfit / totalSalesRevenue) * 100).toFixed(2) + '%' : '0%'
         );
 
-        const n = Object.keys(profitByMaterial).length;
-        showMessage(n > 0 ? `已生成 ${n} 条品种汇总` : '当前筛选条件下没有已完成的出库记录', n > 0 ? 'success' : 'info');
+        renderProfitReportTablePage();
+
+        const n = reportRows.length;
+        showMessage(n > 0 ? `已生成 ${n} 条汇总记录` : '当前筛选条件下没有已完成的出库记录', n > 0 ? 'success' : 'info');
     } catch (e) {
         console.error(e);
         showMessage('生成报表失败：' + (e.message || String(e)), 'error');
     }
 }
 
-// 导出报表到Excel
+// 导出报表到Excel（导出当前筛选条件下的全部汇总行，不限于当前页）
 function exportReportToExcel() {
-    // 创建表格数据
-    const table = document.getElementById('profit-report-table');
-    if (!table) {
+    const rows = profitReportPagination.rows;
+    if (!rows.length) {
         showMessage('没有可导出的数据', 'error');
         return;
     }
-    
-    let csv = '品种代码,品种名称,销售重量(吨),销售均价(元/吨),销售收入(元),销售成本(元),销售利润(元),利润率(%)\n';
-    
-    const rows = table.querySelectorAll('tbody tr');
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        const rowData = Array.from(cells).map(cell => {
-            let text = cell.textContent.trim();
-            // 移除货币符号和千分位分隔符
-            text = text.replace(/¥/g, '').replace(/,/g, '');
-            return `"${text}"`;
-        }).join(',');
-        csv += rowData + '\n';
+
+    let csv = '所属库房,品种代码,品种名称,销售重量(吨),销售均价(元/吨),销售收入(元),销售成本(元),销售利润(元),利润率(%)\n';
+
+    rows.forEach((r) => {
+        const cells = [
+            r.warehouseLabel,
+            r.materialCode,
+            r.materialName,
+            r.salesWeightText,
+            r.avgPriceText,
+            r.revenueText,
+            r.costText,
+            r.profitText,
+            r.marginText
+        ].map((text) => {
+            const t = String(text)
+                .replace(/¥/g, '')
+                .replace(/,/g, '');
+            return `"${t}"`;
+        });
+        csv += cells.join(',') + '\n';
     });
     
     // 创建下载链接
