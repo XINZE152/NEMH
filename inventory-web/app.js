@@ -4796,6 +4796,7 @@ function buildProfitReportRowData(profit, material) {
         costText: formatCurrency(profit.cost),
         profitText: formatCurrency(profit.profit),
         marginText: `${profitMargin}%`,
+        marginValue: profitMargin,
         salesRevenue: profit.salesRevenue,
         cost: profit.cost,
         profit: profit.profit
@@ -4981,7 +4982,7 @@ function exportReportToExcel() {
     let csv = '所属库房,品种代码,品种名称,销售重量(吨),销售均价(元/吨),销售收入(元),销售成本(元),销售利润(元),利润率(%)\n';
 
     rows.forEach((r) => {
-        const cells = [
+        const rawCells = [
             r.warehouseLabel,
             r.materialCode,
             r.materialName,
@@ -4990,11 +4991,16 @@ function exportReportToExcel() {
             r.revenueText,
             r.costText,
             r.profitText,
-            r.marginText
-        ].map((text) => {
-            const t = String(text)
+            r.marginValue
+        ];
+        const cells = rawCells.map((text, index) => {
+            let t = String(text)
                 .replace(/¥/g, '')
                 .replace(/,/g, '');
+            // 利润率不带 %：Excel 会把 "-53997.86%" 当百分比解析，列宽不足时显示 #######
+            if (index === rawCells.length - 1) {
+                t = t.replace(/%$/, '');
+            }
             return `"${t}"`;
         });
         csv += cells.join(',') + '\n';
