@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 5173",
     "build": "vite build",
+    "build:project3": "INVENTORY_BASE=/project3/ vite build",
     "preview": "vite preview --port 5173",
     "sync:ui": "node scripts/sync-inventory-ui.mjs"
   },

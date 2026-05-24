@@ -55,7 +55,17 @@ function inventoryProductionPlugin() {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => {
+  if (command === 'build' && INVENTORY_BASE === '/') {
+    console.warn(
+      '\n[nemh-inventory] 警告：未设置 INVENTORY_BASE，静态资源将指向站点根路径 /。\n' +
+        '  部署到 https://redspiderbc.cn/project3/ 请执行：\n' +
+        '    INVENTORY_BASE=/project3/ npm run build\n' +
+        '  或：npm run build:project3\n'
+    );
+  }
+
+  return {
   base: INVENTORY_BASE,
   plugins: [inventoryProductionPlugin()],
   server: {
@@ -70,4 +80,5 @@ export default defineConfig({
       '/openapi.json': { target: 'http://127.0.0.1:3001', changeOrigin: true },
     },
   },
+  };
 });
