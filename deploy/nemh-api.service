@@ -27,6 +27,17 @@ WorkingDirectory=__REPO_ROOT__/server
 Environment=NODE_ENV=production
 Environment=PORT=8003
 
+# Project2（PD_max）用户库与 SSO — 生产启用时取消注释并核对密钥
+Environment=PD2_AUTH_ENABLED=1
+Environment=PD2_MYSQL_HOST=127.0.0.1
+Environment=PD2_MYSQL_PORT=3306
+Environment=PD2_MYSQL_USER=root
+Environment=PD2_MYSQL_PASSWORD=请改为服务器上 PD_max/.env 中的 MYSQL_PASSWORD
+Environment=PD2_MYSQL_DATABASE=PD_max
+Environment=PD2_JWT_SECRET=change_this_to_a_strong_random_secret
+Environment=PD2_API_BASE_URL=http://127.0.0.1:8001
+Environment=DISABLE_PUBLIC_REGISTER=1
+
 ExecStartPre=/bin/sh -c 'mkdir -p __REPO_ROOT__/logs && echo "$$(date -Is) nemh-api starting" >> __REPO_ROOT__/logs/service.log'
 
 # 使用系统 Node；若仅用 nvm，改为该 node 绝对路径

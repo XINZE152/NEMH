@@ -45,6 +45,13 @@ export function createAdminToken(userId, username, role) {
 }
 
 export async function tryLogin(db, username, password) {
+  if (process.env.PD2_AUTH_ENABLED === '1') {
+    const { loginWithPd2Password } = await import('./pd2Auth.js');
+    const pd2Result = await loginWithPd2Password(db, username, password);
+    if (pd2Result.ok) return pd2Result;
+    if (process.env.PD2_AUTH_FALLBACK !== '1') return { ok: false };
+  }
+
   const row = await get(
     db,
     'SELECT id, username, password_hash, role FROM users WHERE username = ?',

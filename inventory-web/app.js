@@ -131,7 +131,7 @@ function initApp() {
             el.style.display = 'none';
         });
     }
-    checkLoginStatus();
+    checkLoginStatus().catch(function () {});
     updateDashboardStats();
 }
 
@@ -819,7 +819,7 @@ function setupEventListeners() {
 }
 
 // 检查登录状态
-function checkLoginStatus() {
+async function checkLoginStatus() {
     if (useApiMode()) {
         const token = localStorage.getItem('apiToken');
         const user = localStorage.getItem('currentUser');
@@ -844,6 +844,30 @@ function checkLoginStatus() {
                 loadCurrentPage();
                 updateDashboardStats();
             }).catch(function () {});
+            return;
+        }
+
+        if (window.InventoryApi && window.InventoryApi.trySsoFromProject2) {
+            try {
+                const data = await window.InventoryApi.trySsoFromProject2();
+                if (data && data.token && data.user) {
+                    const mapped = window.InventoryApi.mapLoginUser(data.user);
+                    AppState.currentUser = mapped.user;
+                    AppState.currentRole = mapped.role;
+                    localStorage.setItem('apiToken', data.token);
+                    localStorage.setItem('apiUser', JSON.stringify(data.user));
+                    localStorage.setItem('currentUser', JSON.stringify(mapped.user));
+                    localStorage.setItem('currentRole', JSON.stringify(mapped.role));
+                    addAction('login', '从 Project2 单点登录（SSO）');
+                    showAppPage();
+                    await window.InventoryApi.refreshAppStateFromServer(AppState);
+                    loadCurrentPage();
+                    updateDashboardStats();
+                    return;
+                }
+            } catch (e) {
+                /* 无 P2 会话时停留在登录页 */
+            }
         }
         return;
     }

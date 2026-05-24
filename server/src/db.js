@@ -72,6 +72,18 @@ export async function initDb() {
   );
 
   const userCols = await all(db, 'PRAGMA table_info(users)');
+  if (!userCols.some((c) => c.name === 'pd2_user_id')) {
+    await run(db, 'ALTER TABLE users ADD COLUMN pd2_user_id INTEGER');
+  }
+  if (!userCols.some((c) => c.name === 'source')) {
+    await run(db, 'ALTER TABLE users ADD COLUMN source TEXT DEFAULT \'local\'');
+  }
+  await run(
+    db,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_pd2_user_id
+     ON users(pd2_user_id) WHERE pd2_user_id IS NOT NULL`
+  );
+
   if (!userCols.some((c) => c.name === 'role')) {
     await run(
       db,

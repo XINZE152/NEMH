@@ -89,6 +89,43 @@ app.get('/docs', (_req, res) => {
   res.type('html').send(SWAGGER_UI_HTML);
 });
 
+app.post('/api/auth/sso', async (req, res) => {
+  if (process.env.PD2_AUTH_ENABLED !== '1') {
+    return apiError(req, res, 503, {
+      error: '未启用 Project2 单点登录',
+      code: 'PD2_SSO_DISABLED',
+    });
+  }
+  const token =
+    typeof req.body?.token === 'string'
+      ? req.body.token.trim()
+      : '';
+  if (!token) {
+    return apiError(req, res, 400, {
+      error: '缺少 Project2 Token',
+      code: 'MISSING_PD2_TOKEN',
+    });
+  }
+  try {
+    const { loginWithPd2Token } = await import('./pd2Auth.js');
+    const result = await loginWithPd2Token(db, token);
+    if (!result.ok) {
+      return apiError(
+        req,
+        res,
+        401,
+        { error: 'Project2 登录已失效，请重新登录供应链系统', code: result.code || 'PD2_SSO_FAILED' }
+      );
+    }
+    log.info(
+      `SSO 登录成功: ${result.user.username} (id=${result.user.id}, role=${result.user.role})`
+    );
+    res.json({ token: result.token, user: result.user });
+  } catch (e) {
+    sendServerError(res, log, req, 'SSO 登录失败', e, 'PD2_SSO_FAILED');
+  }
+});
+
 app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (

@@ -330,6 +330,36 @@
     });
   }
 
+  function findPd2Token() {
+    try {
+      const keys = ['token', 'access_token', 'authToken', 'redspider_sso_token'];
+      for (let i = 0; i < keys.length; i++) {
+        const v = localStorage.getItem(keys[i]);
+        if (v && String(v).trim()) return String(v).trim();
+      }
+    } catch {
+      /* ignore */
+    }
+    return '';
+  }
+
+  async function ssoLogin(pd2Token) {
+    return apiFetch('/api/auth/sso', {
+      method: 'POST',
+      body: { token: pd2Token },
+    });
+  }
+
+  async function trySsoFromProject2() {
+    const pd2Token = findPd2Token();
+    if (!pd2Token) return null;
+    try {
+      return await ssoLogin(pd2Token);
+    } catch {
+      return null;
+    }
+  }
+
   async function refreshAppStateFromServer(appState) {
     const materials = await apiFetch('/api/admin/materials');
     appState.materials = (materials || []).map(normalizeMaterial);
@@ -447,6 +477,9 @@
     useApiMode: useApiMode,
     mapLoginUser: mapLoginUser,
     login: login,
+    findPd2Token: findPd2Token,
+    ssoLogin: ssoLogin,
+    trySsoFromProject2: trySsoFromProject2,
     refreshAppStateFromServer: refreshAppStateFromServer,
     sumInboundOutboundWeightsFromSubs: sumInboundOutboundWeightsFromSubs,
     enrichInboundOrdersFromFifo: enrichInboundOrdersFromFifo,

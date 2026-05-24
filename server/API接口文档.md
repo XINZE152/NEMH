@@ -122,6 +122,22 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 注册成功后使用 **`POST /api/admin/login`** 同上表，用新用户名、密码登录即可获取 JWT。
 
+### `POST /api/auth/sso`（Project2 单点登录）
+
+从 Project2（PD_max）已登录会话换取本系统 JWT。需服务端设置 `PD2_AUTH_ENABLED=1`，并配置 P2 MySQL 与 `PD2_JWT_SECRET`（与 P2 的 `JWT_SECRET_KEY` 一致；未配置时默认为 `change_this_to_a_strong_random_secret`）。
+
+**请求体：**
+
+```json
+{ "token": "<Project2 登录返回的 JWT>" }
+```
+
+**成功 200：** 与 `POST /api/admin/login` 相同，`{ "token", "user" }`。
+
+**失败：** 400（缺 token）、401（P2 token 无效或用户已禁用）、503（未启用 SSO）。
+
+前端在 `/project3/` 启动时会读取同域 `localStorage` 中的 P2 token（优先 key：`token`），自动调用本接口。
+
 ---
 
 ## 用户管理（仅 `statistics`）

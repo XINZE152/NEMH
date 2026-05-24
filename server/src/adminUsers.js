@@ -2,6 +2,7 @@ import { run, all, get } from './db.js';
 import { hashPassword, USER_ROLES, requireStatisticsRole } from './auth.js';
 import { createLogger } from './logger.js';
 import { enrichUserWithRoleLabel } from './roleLabels.js';
+import { isPd2AuthEnabled, pd2UserManagementBlockedResponse } from './pd2Auth.js';
 
 const log = createLogger('nemh.adminUsers');
 
@@ -35,6 +36,9 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
   });
 
   app.post('/api/admin/users', authMiddleware, requireStatisticsRole, async (req, res) => {
+    if (isPd2AuthEnabled()) {
+      return res.status(403).json(pd2UserManagementBlockedResponse());
+    }
     try {
       const { username, password, role: roleRaw } = req.body || {};
       if (
@@ -79,6 +83,9 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
     authMiddleware,
     requireStatisticsRole,
     async (req, res) => {
+    if (isPd2AuthEnabled()) {
+      return res.status(403).json(pd2UserManagementBlockedResponse());
+    }
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
@@ -169,6 +176,9 @@ export function registerUserAdminRoutes(app, db, authMiddleware) {
     authMiddleware,
     requireStatisticsRole,
     async (req, res) => {
+    if (isPd2AuthEnabled()) {
+      return res.status(403).json(pd2UserManagementBlockedResponse());
+    }
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id < 1) {
