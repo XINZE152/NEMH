@@ -161,7 +161,7 @@
                             <span class="workbench-entry-icon"><i class="fas fa-building" aria-hidden="true"></i></span>
                             <span class="workbench-entry-text">
                                 <span class="workbench-entry-title">库房管理</span>
-                                <span class="workbench-entry-desc">维护库房与仓储信息</span>
+                                <span class="workbench-entry-desc">查看库房与仓储信息</span>
                             </span>
                         </button>
                         <button type="button" class="workbench-entry workbench-entry-compact" data-page="inventory">
@@ -376,16 +376,11 @@
                 </div>
             </div>
 
-            <!-- 库房管理页面 -->
+            <!-- 库房管理页面（只读） -->
             <div id="warehouse-page" class="content-page">
                 <div class="page-header">
                     <h1><i class="fas fa-building"></i> 库房管理</h1>
-                    <p>维护库房基础信息，入库、出库与库存统计将关联此处数据</p>
-                </div>
-                <div class="page-actions">
-                    <button type="button" id="add-warehouse-btn" class="btn-primary">
-                        <i class="fas fa-plus"></i> 新建库房
-                    </button>
+                    <p>查看库房基础信息，入库、出库与库存统计将关联此处数据</p>
                 </div>
                 <div class="data-table-container">
                     <table class="data-table">
@@ -394,7 +389,6 @@
                                 <th>库房代码</th>
                                 <th>库房名称</th>
                                 <th>地址</th>
-                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="warehouse-list">
@@ -642,6 +636,25 @@
                     <h1><i class="fas fa-file-alt"></i> 报表中心</h1>
                     <p>基于已完成的实际出库记录，估算每笔出库业务的毛利</p>
                 </div>
+
+                <div class="report-summary">
+                    <div class="summary-card">
+                        <h4>总销售金额</h4>
+                        <p id="total-sales">¥0</p>
+                    </div>
+                    <div class="summary-card">
+                        <h4>总成本金额</h4>
+                        <p id="total-cost">¥0</p>
+                    </div>
+                    <div class="summary-card">
+                        <h4>总预估毛利</h4>
+                        <p id="total-profit">¥0</p>
+                    </div>
+                    <div class="summary-card">
+                        <h4>平均毛利率</h4>
+                        <p id="avg-profit-rate">0%</p>
+                    </div>
+                </div>
                 
                 <div class="filter-group">
                     <input type="date" id="report-start-date">
@@ -665,6 +678,7 @@
                     <table class="data-table profit-table" id="profit-report-table">
                         <thead>
                             <tr>
+                                <th>所属库房</th>
                                 <th>品种代码</th>
                                 <th>品种名称</th>
                                 <th>销售重量（吨）</th>
@@ -680,23 +694,22 @@
                         </tbody>
                     </table>
                 </div>
-                
-                <div class="report-summary">
-                    <div class="summary-card">
-                        <h4>总销售金额</h4>
-                        <p id="total-sales">¥0</p>
-                    </div>
-                    <div class="summary-card">
-                        <h4>总成本金额</h4>
-                        <p id="total-cost">¥0</p>
-                    </div>
-                    <div class="summary-card">
-                        <h4>总预估毛利</h4>
-                        <p id="total-profit">¥0</p>
-                    </div>
-                    <div class="summary-card">
-                        <h4>平均毛利率</h4>
-                        <p id="avg-profit-rate">0%</p>
+                <div class="report-pagination" id="profit-report-pagination">
+                    <span class="report-pagination-info" id="profit-report-pagination-info">共 0 条</span>
+                    <label class="report-pagination-size">
+                        每页
+                        <select id="profit-report-page-size" aria-label="每页条数">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        条
+                    </label>
+                    <div class="report-pagination-nav">
+                        <button type="button" id="profit-report-prev" class="btn-secondary btn-sm" disabled>上一页</button>
+                        <span id="profit-report-page-indicator">第 1 / 1 页</span>
+                        <button type="button" id="profit-report-next" class="btn-secondary btn-sm" disabled>下一页</button>
                     </div>
                 </div>
             </div>
@@ -860,34 +873,6 @@
                     <div class="modal-footer">
                         <button class="btn-secondary" onclick="closeModal('add-inbound-modal')">取消</button>
                         <button type="button" class="btn-primary" onclick="saveInbound()">保存</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 新建/编辑库房模态框 -->
-            <div id="add-warehouse-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="warehouse-modal-title"><i class="fas fa-warehouse"></i> 新建库房</h3>
-                        <button type="button" class="close-btn" onclick="closeModal('add-warehouse-modal')">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="form-group">
-                            <label for="warehouse-code">库房代码</label>
-                            <input type="text" id="warehouse-code" placeholder="例如 WH-004" autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label for="warehouse-name">库房名称</label>
-                            <input type="text" id="warehouse-name" placeholder="请输入库房名称" autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label for="warehouse-address">地址</label>
-                            <input type="text" id="warehouse-address" placeholder="请输入详细地址" autocomplete="off">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn-secondary" onclick="closeModal('add-warehouse-modal')">取消</button>
-                        <button type="button" class="btn-primary" onclick="submitWarehouseForm()">保存</button>
                     </div>
                 </div>
             </div>
