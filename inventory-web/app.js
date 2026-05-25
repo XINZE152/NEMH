@@ -768,6 +768,10 @@ function setupEventListeners() {
         });
     }
     document.getElementById('inbound-status-filter').addEventListener('change', filterInboundList);
+    const inboundWarehouseFilter = document.getElementById('inbound-warehouse-filter');
+    const inboundMaterialFilter = document.getElementById('inbound-material-filter');
+    if (inboundWarehouseFilter) inboundWarehouseFilter.addEventListener('change', filterInboundList);
+    if (inboundMaterialFilter) inboundMaterialFilter.addEventListener('change', filterInboundList);
 
     // 出库管理：创建预出库计划
     document.getElementById('add-pre-outbound-btn').addEventListener('click', showAddOutboundModal);
@@ -2407,11 +2411,30 @@ function deletePricing(id) {
     addAction('pricing', `删除${material?.name || ''}定价记录`);
 }
 
+function fillInboundFilters() {
+    const wSel = document.getElementById('inbound-warehouse-filter');
+    const mSel = document.getElementById('inbound-material-filter');
+    if (!wSel || !mSel) return;
+    const wv = wSel.value;
+    const mv = mSel.value;
+    wSel.innerHTML = '<option value="">全部库房</option>';
+    AppState.warehouses.forEach((w) => {
+        wSel.appendChild(new Option(`${w.code} - ${w.name}`, String(w.id)));
+    });
+    mSel.innerHTML = '<option value="">全部品种</option>';
+    AppState.materials.forEach((m) => {
+        mSel.appendChild(new Option(`${m.code} - ${m.name}`, String(m.id)));
+    });
+    if ([...wSel.options].some((o) => o.value === wv)) wSel.value = wv;
+    if ([...mSel.options].some((o) => o.value === mv)) mSel.value = mv;
+}
+
 // 加载收货入库页面
 function loadInboundPage() {
     const inboundList = document.getElementById('inbound-list');
     if (!inboundList) return;
-    
+
+    fillInboundFilters();
     inboundList.innerHTML = '';
     
     AppState.inboundOrders.forEach(order => {
@@ -2442,6 +2465,8 @@ function loadInboundPage() {
 
         const row = document.createElement('tr');
         row.dataset.inboundStatus = flowStatus;
+        row.dataset.inboundWarehouseId = String(order.warehouseId ?? '');
+        row.dataset.inboundMaterialId = String(order.materialId ?? '');
         row.innerHTML = `
             <td>${order.orderNo}</td>
             <td>${whLabel}</td>
@@ -2474,20 +2499,25 @@ function loadInboundPage() {
         `;
         inboundList.appendChild(row);
     });
+
+    filterInboundList();
 }
 
-// 过滤入库单列表
+// 过滤入库单列表（库房 / 品种 / 状态）
 function filterInboundList() {
-    const statusFilter = document.getElementById('inbound-status-filter').value;
+    const statusFilter = document.getElementById('inbound-status-filter')?.value || '';
+    const warehouseFilter = document.getElementById('inbound-warehouse-filter')?.value || '';
+    const materialFilter = document.getElementById('inbound-material-filter')?.value || '';
     const rows = document.querySelectorAll('#inbound-list tr');
-    
+
     rows.forEach((row) => {
-        if (!statusFilter || statusFilter === 'all') {
-            row.style.display = '';
-            return;
-        }
-        const ds = row.dataset.inboundStatus || '';
-        row.style.display = ds === statusFilter ? '' : 'none';
+        const matchStatus =
+            !statusFilter || statusFilter === 'all' || (row.dataset.inboundStatus || '') === statusFilter;
+        const matchWarehouse =
+            !warehouseFilter || String(row.dataset.inboundWarehouseId || '') === warehouseFilter;
+        const matchMaterial =
+            !materialFilter || String(row.dataset.inboundMaterialId || '') === materialFilter;
+        row.style.display = matchStatus && matchWarehouse && matchMaterial ? '' : 'none';
     });
 }
 

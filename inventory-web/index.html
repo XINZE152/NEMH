@@ -349,7 +349,13 @@
                         <i class="fas fa-plus"></i> 新建入库单
                     </button>
                     <div class="filter-group">
-                        <select id="inbound-status-filter">
+                        <select id="inbound-warehouse-filter" aria-label="库房筛选">
+                            <option value="">全部库房</option>
+                        </select>
+                        <select id="inbound-material-filter" aria-label="品种筛选">
+                            <option value="">全部品种</option>
+                        </select>
+                        <select id="inbound-status-filter" aria-label="状态筛选">
                             <option value="">全部状态</option>
                             <option value="approved">待出库</option>
                             <option value="outbounding">出库中</option>
