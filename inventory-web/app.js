@@ -5149,6 +5149,8 @@ function renderWarehouseDailyTable(data) {
             td.textContent = r.warehouseName || '—';
             tr.appendChild(td);
         }
+        const ib = r.inbound;
+        const ob = r.outbound;
         const cells = [
             r.materialName || '—',
             r.openingStockTon != null ? formatNumber(r.openingStockTon) : '—',
@@ -5177,7 +5179,7 @@ function renderWarehouseDailyTable(data) {
         cells.forEach((text, i) => {
             const td = document.createElement('td');
             td.textContent = text;
-            if (i === 8 || i === 12) td.classList.add('col-highlight');
+            if (i === 8 || i === 13) td.classList.add('col-highlight');
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
