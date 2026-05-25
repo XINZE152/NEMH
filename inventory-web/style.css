@@ -2475,3 +2475,52 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* 库房当日总计 */
+.warehouse-daily-filters {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.warehouse-daily-filters label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #555;
+}
+
+.warehouse-daily-table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.warehouse-daily-table {
+    min-width: 2200px;
+    font-size: 12px;
+}
+
+.warehouse-daily-table .warehouse-daily-head-group th,
+.warehouse-daily-table .warehouse-daily-head-detail th {
+    text-align: center;
+    white-space: nowrap;
+    background: #f0f4f8;
+}
+
+.warehouse-daily-table td.col-highlight,
+.warehouse-daily-table th.col-highlight {
+    background: #fff9e6;
+}
+
+.warehouse-daily-table tbody td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.warehouse-daily-table .empty-hint {
+    text-align: center;
+    color: #888;
+    padding: 24px;
+}

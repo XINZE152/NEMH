@@ -1118,6 +1118,9 @@ function loadPageContent(page) {
         case 'reports':
             loadReportsPage();
             break;
+        case 'warehouse-daily':
+            loadWarehouseDailyPage();
+            break;
         case 'users':
             loadUsersPage();
             break;
@@ -5017,6 +5020,256 @@ function exportReportToExcel() {
     document.body.removeChild(link);
     
     showMessage('报表已导出为CSV文件', 'success');
+}
+
+let warehouseDailyPageInited = false;
+
+function isStatisticsOrAdmin() {
+    return isSystemAdministrator() || getApiUserRole() === 'statistics';
+}
+
+function fmtDailyCell(v, kind) {
+    if (v == null || v === '') return '—';
+    if (kind === 'ton') return formatNumber(v);
+    if (kind === 'money') return formatCurrency(v);
+    return String(v);
+}
+
+function fillWarehouseDailyFilterSelects() {
+    const whSel = document.getElementById('warehouse-daily-warehouse-select');
+    const matSel = document.getElementById('warehouse-daily-material-select');
+    if (whSel) {
+        const cur = whSel.value;
+        whSel.innerHTML = '<option value="">全部库房</option>';
+        (AppState.warehouses || []).forEach((w) => {
+            const opt = document.createElement('option');
+            opt.value = String(w.id);
+            opt.textContent = w.name || w.code || String(w.id);
+            whSel.appendChild(opt);
+        });
+        if (cur) whSel.value = cur;
+    }
+    if (matSel) {
+        const cur = matSel.value;
+        matSel.innerHTML = '<option value="">全部品类</option>';
+        (AppState.materials || []).forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = String(m.id);
+            opt.textContent = m.name || m.code || String(m.id);
+            matSel.appendChild(opt);
+        });
+        if (cur) matSel.value = cur;
+    }
+}
+
+function applyWarehouseDailyManagerOptions(managers) {
+    const sel = document.getElementById('warehouse-daily-manager-select');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部大区经理</option>';
+    (managers || []).forEach((rm) => {
+        const opt = document.createElement('option');
+        opt.value = rm;
+        opt.textContent = rm;
+        sel.appendChild(opt);
+    });
+    if (cur) sel.value = cur;
+}
+
+function buildWarehouseDailyDisplayRows(data) {
+    const rows = [];
+    (data.blocks || []).forEach((block) => {
+        (block.categories || []).forEach((cat) => {
+            const lines =
+                cat.lines && cat.lines.length
+                    ? cat.lines
+                    : [
+                          {
+                              lineType: 'balance',
+                              openingStockTon: cat.openingStockTon,
+                              closingStockTon: cat.closingStockTon,
+                              inbound: null,
+                              outbound: null,
+                          },
+                      ];
+            lines.forEach((line, lineIdx) => {
+                rows.push({
+                    regionalManager: block.regionalManager,
+                    warehouseName: block.warehouseName,
+                    materialName: cat.materialName,
+                    openingStockTon:
+                        lineIdx === 0 ? cat.openingStockTon : null,
+                    closingStockTon: line.closingStockTon,
+                    benchmark: cat.benchmarkReferencePrice,
+                    collective: cat.collectiveProfitHalf,
+                    inbound: line.inbound,
+                    outbound: line.outbound,
+                });
+            });
+        });
+    });
+    return rows;
+}
+
+function renderWarehouseDailyTable(data) {
+    const tbody = document.getElementById('warehouse-daily-tbody');
+    if (!tbody) return;
+    const displayRows = buildWarehouseDailyDisplayRows(data);
+    if (!displayRows.length) {
+        tbody.innerHTML =
+            '<tr><td colspan="25" class="empty-hint">当前条件下无数据</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    let lastManager = '\0';
+    let lastWarehouse = '\0';
+    displayRows.forEach((r) => {
+        const tr = document.createElement('tr');
+        if (r.regionalManager !== lastManager) {
+            lastManager = r.regionalManager;
+            lastWarehouse = '\0';
+            const mgrCount = displayRows.filter(
+                (x) => x.regionalManager === r.regionalManager
+            ).length;
+            const td = document.createElement('td');
+            td.rowSpan = mgrCount;
+            td.textContent = r.regionalManager || '—';
+            tr.appendChild(td);
+        }
+        if (r.warehouseName !== lastWarehouse) {
+            lastWarehouse = r.warehouseName;
+            const whCount = displayRows.filter(
+                (x) =>
+                    x.regionalManager === r.regionalManager &&
+                    x.warehouseName === r.warehouseName
+            ).length;
+            const td = document.createElement('td');
+            td.rowSpan = whCount;
+            td.textContent = r.warehouseName || '—';
+            tr.appendChild(td);
+        }
+        const cells = [
+            r.materialName || '—',
+            r.openingStockTon != null ? formatNumber(r.openingStockTon) : '—',
+            ib ? ib.date || '—' : '—',
+            ib ? ib.materialName || '—' : '—',
+            ib ? fmtDailyCell(ib.unitPrice, 'money') : '—',
+            ib ? fmtDailyCell(ib.freight, 'money') : '—',
+            ib ? fmtDailyCell(ib.costUnitPrice, 'money') : '—',
+            ib ? fmtDailyCell(ib.grossProfitPerTon, 'money') : '—',
+            ib ? fmtDailyCell(ib.netWeightTon, 'ton') : '—',
+            ib ? fmtDailyCell(ib.costAmount, 'money') : '—',
+            ob ? ob.weighbridgeDate || '—' : '—',
+            ob ? ob.vehicleNo || '—' : '—',
+            ob ? ob.materialName || '—' : '—',
+            ob ? fmtDailyCell(ob.weightTon, 'ton') : '—',
+            ob ? fmtDailyCell(ob.fifoUnitPrice, 'money') : '—',
+            ob ? fmtDailyCell(ob.amount, 'money') : '—',
+            ob ? fmtDailyCell(ob.pickupUnitPrice, 'money') : '—',
+            ob ? fmtDailyCell(ob.paymentAmount, 'money') : '—',
+            ob ? fmtDailyCell(ob.storageServiceFeePerTon, 'money') : '—',
+            ob ? fmtDailyCell(ob.profitAmount, 'money') : '—',
+            fmtDailyCell(r.closingStockTon, 'ton'),
+            fmtDailyCell(r.benchmark, 'money'),
+            r.collective != null ? fmtDailyCell(r.collective, 'money') : '—',
+        ];
+        cells.forEach((text, i) => {
+            const td = document.createElement('td');
+            td.textContent = text;
+            if (i === 8 || i === 12) td.classList.add('col-highlight');
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+async function queryWarehouseDailySummary() {
+    const dateEl = document.getElementById('warehouse-daily-date');
+    const date = dateEl?.value || '';
+    if (!date) {
+        showMessage('请选择统计日', 'error');
+        return;
+    }
+    const regionalManager =
+        document.getElementById('warehouse-daily-manager-select')?.value || '';
+    const warehouseId =
+        document.getElementById('warehouse-daily-warehouse-select')?.value || '';
+    const materialId =
+        document.getElementById('warehouse-daily-material-select')?.value || '';
+
+    if (!window.InventoryApi?.useApiMode?.()) {
+        showMessage('请使用后端 API 模式登录后查询', 'error');
+        return;
+    }
+
+    try {
+        const data = await window.InventoryApi.warehouseDailySummary({
+            date,
+            regionalManager: regionalManager || undefined,
+            warehouseId: warehouseId || undefined,
+            materialId: materialId || undefined,
+        });
+        if (data.filterOptions?.regionalManagers) {
+            applyWarehouseDailyManagerOptions(data.filterOptions.regionalManagers);
+        }
+        renderWarehouseDailyTable(data);
+        const lineCount = (data.blocks || []).reduce(
+            (n, b) =>
+                n +
+                (b.categories || []).reduce(
+                    (m, c) => m + (c.lines?.length || 1),
+                    0
+                ),
+            0
+        );
+        showMessage(
+            lineCount > 0
+                ? `已加载 ${data.blocks.length} 个库房、${lineCount} 行明细`
+                : '当前条件下无明细数据',
+            lineCount > 0 ? 'success' : 'info'
+        );
+    } catch (e) {
+        console.error(e);
+        showMessage('查询失败：' + (e.message || String(e)), 'error');
+    }
+}
+
+function loadWarehouseDailyPage() {
+    fillWarehouseDailyFilterSelects();
+    const dateEl = document.getElementById('warehouse-daily-date');
+    if (dateEl && !dateEl.value) {
+        dateEl.value = '2026-05-16';
+    }
+    const syncBtn = document.getElementById('warehouse-daily-sync-rm-btn');
+    if (syncBtn) {
+        syncBtn.hidden = !isStatisticsOrAdmin();
+    }
+    if (!warehouseDailyPageInited) {
+        warehouseDailyPageInited = true;
+        document
+            .getElementById('warehouse-daily-query-btn')
+            ?.addEventListener('click', () => queryWarehouseDailySummary());
+        document
+            .getElementById('warehouse-daily-sync-rm-btn')
+            ?.addEventListener('click', async () => {
+                if (!window.InventoryApi?.syncRegionalManagersFromPd2) return;
+                try {
+                    const r =
+                        await window.InventoryApi.syncRegionalManagersFromPd2(180);
+                    showMessage(
+                        `已更新 ${r.updated} 个库房大区经理（跳过手工 ${r.skippedManual}，无匹配 ${r.unmatched}）`,
+                        'success'
+                    );
+                    await queryWarehouseDailySummary();
+                } catch (e) {
+                    showMessage(
+                        '同步失败：' + (e.message || String(e)),
+                        'error'
+                    );
+                }
+            });
+    }
 }
 
 // 初始化页面加载

@@ -518,6 +518,26 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **响应：** `{ "rows", "total", "page", "pageSize" }`。
 
+### `POST /api/admin/warehouses/sync-regional-managers-from-pd2`（仅 `statistics`）
+
+从 Project2（`PD_max`）`pd_ip_delivery_records` **只读**同步大区经理到本地 `warehouses.regional_manager_name`（近 180 天送货条数众数；`regional_manager_source=manual` 的不覆盖）。
+
+**请求体（可选）：** `{ "lookbackDays": 180 }`
+
+**响应：** `{ ok, updated, skippedManual, unmatched, ... }`
+
+### `PATCH /api/admin/warehouses/:id/regional-manager`（仅 `statistics`）
+
+手工覆盖大区经理：`{ "regionalManagerName": "李明雨" }` → `source=manual`。
+
+### `GET /api/admin/reports/warehouse-daily-summary`
+
+库房当日总计（入出库来自本系统 SQLite；运费/对标参考价在配置 PD2 MySQL 且库房 `external_source=tl` 时只读 PD2）。
+
+**Query：** `date`（必填 `YYYY-MM-DD`）, `regionalManager`, `warehouseId`, `materialId`（均可选）
+
+**响应：** `{ date, filters, filterOptions: { regionalManagers }, blocks: [{ warehouseId, warehouseName, regionalManager, categories: [{ materialName, openingStockTon, closingStockTon, lines: [...] }] }] }`
+
 ---
 
 ## 路由注册顺序说明

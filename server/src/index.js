@@ -23,6 +23,8 @@ import { registerProfitReportRoutes } from './profitReport.js';
 import { registerInboundReportRoutes } from './inboundReport.js';
 import { registerWarehouseStockReportRoutes } from './inventoryWarehouseReport.js';
 import { registerWarehouseRoutes } from './warehouses.js';
+import { registerWarehouseRegionalManagerRoutes } from './warehouseRegionalManager.js';
+import { registerWarehouseDailySummaryRoutes } from './warehouseDailySummaryReport.js';
 import { registerPublicRegisterRoute } from './publicRegister.js';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -166,6 +168,8 @@ async function main() {
   registerPublicRegisterRoute(app, db);
   registerUserAdminRoutes(app, db, authMiddleware);
   registerWarehouseRoutes(app, db, authMiddleware);
+  registerWarehouseRegionalManagerRoutes(app, db, authMiddleware);
+  registerWarehouseDailySummaryRoutes(app, db, authMiddleware);
   registerPurchasePriceRoutes(app, db, authMiddleware);
   registerSalePriceRoutes(app, db, authMiddleware);
   registerInboundOrderRoutes(app, db, authMiddleware);

@@ -39,11 +39,22 @@ function mysqlConfig() {
   };
 }
 
-function getPool() {
+export function isPd2MysqlEnabled() {
+  return (
+    process.env.PD2_AUTH_ENABLED === '1' ||
+    Boolean(process.env.PD2_MYSQL_HOST?.trim())
+  );
+}
+
+export function getPd2Pool() {
   if (!pool) {
     pool = mysql.createPool(mysqlConfig());
   }
   return pool;
+}
+
+function getPool() {
+  return getPd2Pool();
 }
 
 /** P2 role → P3 role；admin 映射为 statistics，其余默认 warehouse */

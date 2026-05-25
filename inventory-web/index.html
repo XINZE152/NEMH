@@ -178,6 +178,13 @@
                                 <span class="workbench-entry-desc">利润汇总与库存分析</span>
                             </span>
                         </button>
+                        <button type="button" class="workbench-entry workbench-entry-compact" data-page="warehouse-daily">
+                            <span class="workbench-entry-icon"><i class="fas fa-table" aria-hidden="true"></i></span>
+                            <span class="workbench-entry-text">
+                                <span class="workbench-entry-title">库房当日总计</span>
+                                <span class="workbench-entry-desc">垂直回收体系日报，支持筛选</span>
+                            </span>
+                        </button>
                         <button type="button" class="workbench-entry workbench-entry-compact" data-page="users" id="workbench-entry-users">
                             <span class="workbench-entry-icon"><i class="fas fa-users-cog" aria-hidden="true"></i></span>
                             <span class="workbench-entry-text">
@@ -713,6 +720,73 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 库房当日总计 -->
+            <div id="warehouse-daily-page" class="content-page">
+                <div class="page-header">
+                    <h1><i class="fas fa-table"></i> 库房当日总计</h1>
+                    <p>按 Excel 口径展示大区经理、库房、品类及当日入出库明细（数据来自本系统，大区经理/运费参考可从 Project2 同步）</p>
+                </div>
+                <div class="filter-group warehouse-daily-filters">
+                    <label>统计日 <input type="date" id="warehouse-daily-date" aria-label="统计日"></label>
+                    <select id="warehouse-daily-manager-select" aria-label="大区经理">
+                        <option value="">全部大区经理</option>
+                    </select>
+                    <select id="warehouse-daily-warehouse-select" aria-label="库房">
+                        <option value="">全部库房</option>
+                    </select>
+                    <select id="warehouse-daily-material-select" aria-label="品类">
+                        <option value="">全部品类</option>
+                    </select>
+                    <button type="button" id="warehouse-daily-query-btn" class="btn-primary">
+                        <i class="fas fa-search"></i> 查询
+                    </button>
+                    <button type="button" id="warehouse-daily-sync-rm-btn" class="btn-secondary" hidden>
+                        <i class="fas fa-sync"></i> 同步大区经理
+                    </button>
+                </div>
+                <div class="data-table-container warehouse-daily-table-wrap">
+                    <table class="data-table warehouse-daily-table" id="warehouse-daily-table">
+                        <thead>
+                            <tr class="warehouse-daily-head-group">
+                                <th rowspan="2">大区经理</th>
+                                <th rowspan="2">库房名称</th>
+                                <th rowspan="2">品类</th>
+                                <th rowspan="2">前日库存</th>
+                                <th colspan="8">当日入库</th>
+                                <th colspan="10">当日出库</th>
+                                <th rowspan="2">当日库存/t</th>
+                                <th rowspan="2">对标参考价</th>
+                                <th rowspan="2">集体利润/2</th>
+                            </tr>
+                            <tr class="warehouse-daily-head-detail">
+                                <th>日期</th>
+                                <th>品类</th>
+                                <th>单价</th>
+                                <th>运费</th>
+                                <th>成本单价</th>
+                                <th>毛利/t</th>
+                                <th class="col-highlight">净重/t</th>
+                                <th>成本金额</th>
+                                <th>磅单日期</th>
+                                <th>车号</th>
+                                <th>品类</th>
+                                <th class="col-highlight">重量/t</th>
+                                <th>先进先出单价</th>
+                                <th>金额</th>
+                                <th>取单价</th>
+                                <th>付款金额</th>
+                                <th>仓储服务费</th>
+                                <th>利润金额</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warehouse-daily-tbody">
+                            <tr><td colspan="25" class="empty-hint">请选择统计日后点击查询</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- 用户管理（仅系统管理员可见） -->
             <div id="users-page" class="content-page">
                 <div class="page-header">

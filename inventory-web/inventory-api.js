@@ -584,5 +584,25 @@
     deleteUser: function (id) {
       return apiFetch('/api/admin/users/' + id, { method: 'DELETE' });
     },
+    syncRegionalManagersFromPd2: function (lookbackDays) {
+      return apiFetch('/api/admin/warehouses/sync-regional-managers-from-pd2', {
+        method: 'POST',
+        body: lookbackDays != null ? { lookbackDays: lookbackDays } : {},
+      });
+    },
+    warehouseDailySummary: function (query) {
+      const params = new URLSearchParams();
+      const q = query || {};
+      if (q.date) params.set('date', q.date);
+      if (q.regionalManager) params.set('regionalManager', q.regionalManager);
+      if (q.warehouseId != null && q.warehouseId !== '')
+        params.set('warehouseId', String(q.warehouseId));
+      if (q.materialId != null && q.materialId !== '')
+        params.set('materialId', String(q.materialId));
+      const s = params.toString();
+      return apiFetch(
+        '/api/admin/reports/warehouse-daily-summary' + (s ? '?' + s : '')
+      );
+    },
   };
 })();

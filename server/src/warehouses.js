@@ -27,6 +27,16 @@ function trimStr(v) {
   return String(v).trim();
 }
 
+const WAREHOUSE_SELECT_SQL = `SELECT id, code, name,
+    IFNULL(address, '') AS address,
+    external_source,
+    external_id,
+    regional_manager_name,
+    regional_manager_source,
+    regional_manager_synced_at,
+    created_at AS created_at,
+    updated_at AS updated_at`;
+
 function mapWarehouseRow(row) {
   if (!row) return null;
   return {
@@ -36,6 +46,9 @@ function mapWarehouseRow(row) {
     address: row.address ?? '',
     externalSource: row.external_source ?? null,
     externalId: row.external_id ?? null,
+    regionalManagerName: row.regional_manager_name ?? null,
+    regionalManagerSource: row.regional_manager_source ?? null,
+    regionalManagerSyncedAt: row.regional_manager_synced_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -152,13 +165,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       }
 
       const search = trimStr(req.query.search);
-      let sql = `SELECT id, code, name,
-          IFNULL(address, '') AS address,
-          external_source,
-          external_id,
-          created_at AS created_at,
-          updated_at AS updated_at
-        FROM warehouses`;
+      let sql = `${WAREHOUSE_SELECT_SQL} FROM warehouses`;
       const params = [];
       if (search) {
         sql += ` WHERE code LIKE ? OR name LIKE ? OR IFNULL(address, '') LIKE ?`;
@@ -182,13 +189,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       }
       const row = await get(
         db,
-        `SELECT id, code, name,
-            IFNULL(address, '') AS address,
-            external_source,
-            external_id,
-            created_at AS created_at,
-            updated_at AS updated_at
-          FROM warehouses WHERE id = ?`,
+        `${WAREHOUSE_SELECT_SQL} FROM warehouses WHERE id = ?`,
         [id]
       );
       if (!row) return res.status(404).json({ error: '库房不存在' });
@@ -217,13 +218,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       );
       const row = await get(
         db,
-        `SELECT id, code, name,
-            IFNULL(address, '') AS address,
-            external_source,
-            external_id,
-            created_at AS created_at,
-            updated_at AS updated_at
-          FROM warehouses WHERE id = ?`,
+        `${WAREHOUSE_SELECT_SQL} FROM warehouses WHERE id = ?`,
         [result.lastID]
       );
       res.status(201).json(mapWarehouseRow(row));
@@ -265,11 +260,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       if (code === undefined && name === undefined && address === undefined) {
         const row = await get(
           db,
-          `SELECT id, code, name,
-              IFNULL(address, '') AS address,
-              created_at AS created_at,
-              updated_at AS updated_at
-            FROM warehouses WHERE id = ?`,
+          `${WAREHOUSE_SELECT_SQL} FROM warehouses WHERE id = ?`,
           [id]
         );
         return res.json(mapWarehouseRow(row));
@@ -298,13 +289,7 @@ export function registerWarehouseRoutes(app, db, authMiddleware) {
       );
       const row = await get(
         db,
-        `SELECT id, code, name,
-            IFNULL(address, '') AS address,
-            external_source,
-            external_id,
-            created_at AS created_at,
-            updated_at AS updated_at
-          FROM warehouses WHERE id = ?`,
+        `${WAREHOUSE_SELECT_SQL} FROM warehouses WHERE id = ?`,
         [id]
       );
       res.json(mapWarehouseRow(row));

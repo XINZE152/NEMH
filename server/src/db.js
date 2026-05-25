@@ -192,6 +192,19 @@ export async function initDb() {
   if (!whCols2.some((c) => c.name === 'external_id')) {
     await run(db, 'ALTER TABLE warehouses ADD COLUMN external_id TEXT');
   }
+  const whCols3 = await all(db, 'PRAGMA table_info(warehouses)');
+  if (!whCols3.some((c) => c.name === 'regional_manager_name')) {
+    await run(db, 'ALTER TABLE warehouses ADD COLUMN regional_manager_name TEXT');
+  }
+  if (!whCols3.some((c) => c.name === 'regional_manager_source')) {
+    await run(db, 'ALTER TABLE warehouses ADD COLUMN regional_manager_source TEXT');
+  }
+  if (!whCols3.some((c) => c.name === 'regional_manager_synced_at')) {
+    await run(
+      db,
+      'ALTER TABLE warehouses ADD COLUMN regional_manager_synced_at TEXT'
+    );
+  }
   await run(
     db,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouses_external
