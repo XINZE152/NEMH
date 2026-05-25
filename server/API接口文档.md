@@ -136,7 +136,7 @@ JWT 内虽含 `role`，服务端每次请求会**按用户 id 从数据库重新
 
 **失败：** 400（缺 token）、401（P2 token 无效或用户已禁用）、503（未启用 SSO）。
 
-前端在 `/project3/` 启动时会读取同域 `localStorage` 中的 P2 token（优先 key：`token`），自动调用本接口。
+前端在 `/project3/` 启动时会读取同域 `localStorage` 中的 P2 token（PD_max 使用 key **`api_token`**；亦兼容 `token`、`access_token` 等），自动调用本接口。
 
 ---
 

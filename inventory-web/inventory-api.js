@@ -332,7 +332,14 @@
 
   function findPd2Token() {
     try {
-      const keys = ['token', 'access_token', 'authToken', 'redspider_sso_token'];
+      // PD_max（/project2/）登录后写入 api_token；其余为历史/兼容 key
+      const keys = [
+        'api_token',
+        'token',
+        'access_token',
+        'authToken',
+        'redspider_sso_token',
+      ];
       for (let i = 0; i < keys.length; i++) {
         const v = localStorage.getItem(keys[i]);
         if (v && String(v).trim()) return String(v).trim();
