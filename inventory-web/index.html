@@ -1185,7 +1185,7 @@
 
             <!-- 出库详情模态框 -->
             <div id="outbound-detail-modal" class="modal">
-                <div class="modal-content">
+                <div class="modal-content outbound-detail-modal-content">
                     <div class="modal-header">
                         <h3><i class="fas fa-eye"></i> 出库单详情</h3>
                         <button class="close-btn" onclick="closeModal('outbound-detail-modal')">&times;</button>
@@ -1239,12 +1239,13 @@
                         </div>
                         <p id="outbound-detail-weighing-empty" style="display: none; margin-top: 16px; color: #888; font-size: 14px;">暂无磅单图片</p>
                         
+                        <div class="outbound-fifo-section">
                         <h4>FIFO 分配明细</h4>
                         <p id="outbound-fifo-hint" class="form-hint" style="margin: 0 0 10px;">
                             按所选库房与品种，依入库时间先进先出扣减；下列各行对应该出库单的 FIFO 子单。
                         </p>
-                        <div class="data-table-container">
-                            <table class="data-table">
+                        <div class="data-table-container outbound-fifo-table-wrap" tabindex="0" aria-label="FIFO 分配明细，可滚动查看">
+                            <table class="data-table outbound-fifo-table">
                                 <thead>
                                     <tr>
                                         <th>序号</th>
@@ -1261,6 +1262,7 @@
                                     <!-- 动态生成 -->
                                 </tbody>
                             </table>
+                        </div>
                         </div>
                     </div>
                     <div class="modal-footer">
