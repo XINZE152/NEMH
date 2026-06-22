@@ -457,10 +457,10 @@ body {
     font-size: 16px;
 }
 
-/* 仪表板样式：宽屏下「定价与报价」与三张统计卡同一行 */
+/* 仪表板样式：固定两行——定价/报价+本月入库；库存积压+本月毛利 */
 .dashboard-stats {
     display: grid;
-    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 40px;
     align-items: stretch;
@@ -468,16 +468,6 @@ body {
 
 .stat-card-pricing-wide {
     min-width: 0;
-}
-
-@media (max-width: 900px) {
-    .dashboard-stats {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .stat-card-pricing-wide {
-        grid-column: 1 / -1;
-    }
 }
 
 .stat-content-pricing-panel {
@@ -1538,13 +1528,9 @@ body {
     }
     
     .dashboard-stats {
-        grid-template-columns: 1fr;
+        gap: 12px;
     }
 
-    .stat-card-pricing-wide {
-        grid-column: auto;
-    }
-    
     .page-actions {
         flex-direction: column;
         align-items: stretch;
@@ -2291,6 +2277,54 @@ body {
     line-height: 1.35;
     color: #5a6a7a;
     font-weight: 400;
+}
+
+.outbound-detail-modal-content {
+    max-width: min(960px, 96vw);
+    width: min(960px, 96vw);
+}
+
+.outbound-fifo-section {
+    margin-top: 20px;
+}
+
+.outbound-fifo-table-wrap {
+    overflow: auto;
+    max-height: min(320px, 42vh);
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: none;
+}
+
+.outbound-fifo-table-wrap:focus-visible {
+    outline: 2px solid #2196f3;
+    outline-offset: 2px;
+}
+
+.outbound-fifo-table {
+    min-width: 760px;
+    margin: 0;
+}
+
+.outbound-fifo-table th,
+.outbound-fifo-table td {
+    white-space: nowrap;
+}
+
+.outbound-fifo-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8f9fa;
+    box-shadow: 0 1px 0 #e9ecef;
+}
+
+.outbound-fifo-table .fifo-total-row td {
+    position: sticky;
+    bottom: 0;
+    background: #f0f7ff;
+    box-shadow: 0 -1px 0 #e9ecef;
 }
 
 .outbound-detail-weighing .view-multi-img-wrap img {

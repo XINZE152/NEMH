@@ -1038,6 +1038,7 @@ const WORKBENCH_BACK_PAGES = new Set([
     'warehouse',
     'inventory',
     'reports',
+    'warehouse-daily',
     'users',
 ]);
 
