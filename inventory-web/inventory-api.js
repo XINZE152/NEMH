@@ -50,9 +50,6 @@
     }
     if (!res.ok) {
       let msg = (data && data.error) || res.statusText || '请求失败';
-      if (data && data.code) {
-        msg = '[' + data.code + '] ' + msg;
-      }
       if (data && data.detail) {
         msg += '（' + data.detail + '）';
       }
