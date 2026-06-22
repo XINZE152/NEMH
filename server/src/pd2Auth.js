@@ -197,7 +197,7 @@ export async function loginWithPd2Token(db, pd2Token) {
 
 export function pd2UserManagementBlockedResponse() {
   return {
-    error: '用户请在 Project2（供应链系统）中管理',
+    error: '请在废铅蓄电池供应链服务系统中创建用户',
     code: 'PD2_USER_MANAGEMENT_DISABLED',
   };
 }
