@@ -958,7 +958,7 @@ body {
 .data-table-container {
     background: white;
     border-radius: 12px;
-    overflow: hidden;
+    overflow-x: auto;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
 }
 
@@ -974,6 +974,7 @@ body {
     font-weight: 600;
     color: #555;
     border-bottom: 2px solid #e9ecef;
+    white-space: nowrap;
 }
 
 .data-table th.sortable-th {
@@ -1020,6 +1021,7 @@ body {
 .data-table td {
     padding: 16px;
     border-bottom: 1px solid #e9ecef;
+    white-space: nowrap;
 }
 
 .data-table tr:hover {
