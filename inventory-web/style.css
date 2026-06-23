@@ -585,16 +585,17 @@ body {
     margin-bottom: 8px;
 }
 
-.stat-content p {
+.stat-content .stat-number {
     font-size: 32px;
     font-weight: 700;
     color: #2c3e50;
     line-height: 1;
 }
 
-.stat-content span {
+.stat-content .stat-unit {
     font-size: 14px;
     color: #95a5a6;
+    white-space: nowrap;
 }
 
 .dashboard-content {
@@ -1286,6 +1287,7 @@ body {
     gap: 10px;
 }
 
+.deduction-mode select,
 .warning-status-filter select {
     min-width: 120px;
     padding: 8px 12px;

@@ -213,8 +213,7 @@
                             </div>
                             <div class="stat-content">
                                 <h3>本月入库</h3>
-                                <p id="month-inbound-count">0</p>
-                                <span>单</span>
+                                <div><span id="month-inbound-count" class="stat-number">0</span><span class="stat-unit"> 单</span></div>
                             </div>
                         </div>
 
@@ -224,8 +223,7 @@
                             </div>
                             <div class="stat-content">
                                 <h3>库存积压</h3>
-                                <p id="warning-count">0</p>
-                                <span>项</span>
+                                <div><span id="warning-count" class="stat-number">0</span><span class="stat-unit"> 项</span></div>
                             </div>
                         </div>
 
@@ -235,8 +233,7 @@
                             </div>
                             <div class="stat-content">
                                 <h3>本月毛利</h3>
-                                <p id="month-profit">¥0</p>
-                                <span>元</span>
+                                <div><span id="month-profit" class="stat-number">¥0</span><span class="stat-unit"> 元</span></div>
                             </div>
                         </div>
                     </div>
@@ -564,8 +561,8 @@
                             <div class="deduction-mode">
                                 <label>扣减逻辑：</label>
                                 <select id="deduction-mode">
-                                    <option value="both">可用库存：总入库 − 实际出库与预出库占用（combined）</option>
-                                    <option value="actual">可用库存：总入库 − 仅已实际出库（actual）</option>
+                                    <option value="both">可用库存：总入库 − 实际出库与预出库占用</option>
+                                    <option value="actual">可用库存：总入库 − 仅已实际出库</option>
                                 </select>
                             </div>
                             <div class="warning-status-filter">

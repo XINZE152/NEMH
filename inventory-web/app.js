@@ -2109,11 +2109,11 @@ function loadPricingPage() {
         const displayTime = record.datetime || record.date || '-';
 
         const editDelete = canMutatePricing
-            ? `<button class="btn btn-sm btn-icon" onclick="editPricing(${record.id})">
-                    <i class="fas fa-edit"></i>
+            ? `<button class="btn btn-sm btn-primary" onclick="editPricing(${record.id})">
+                    <i class="fas fa-edit"></i> 编辑
                 </button>
-                <button class="btn btn-sm btn-icon btn-danger" onclick="deletePricing(${record.id})">
-                    <i class="fas fa-trash"></i>
+                <button class="btn btn-sm btn-danger" onclick="deletePricing(${record.id})">
+                    <i class="fas fa-trash"></i> 删除
                 </button>`
             : '';
 
@@ -2125,8 +2125,8 @@ function loadPricingPage() {
             <td class="datetime-display">${displayTime}</td>
             <td>
                 ${editDelete}
-                <button type="button" class="btn btn-sm btn-icon btn-view" onclick="viewPricingImages(${record.id})" title="查看凭证">
-                    <i class="fas fa-eye"></i>
+                <button type="button" class="btn btn-sm btn-info" onclick="viewPricingImages(${record.id})">
+                    <i class="fas fa-image"></i> 凭证
                 </button>
             </td>
         `;
@@ -2481,19 +2481,19 @@ function loadInboundPage() {
             <td>${timeIn}</td>
             <td>
                 ${showMutate ? `
-                    <button class="btn btn-sm btn-icon" onclick="editInbound(${order.id})" title="编辑">
-                        <i class="fas fa-edit"></i>
+                    <button class="btn btn-sm btn-primary" onclick="editInbound(${order.id})">
+                        <i class="fas fa-edit"></i> 编辑
                     </button>
                 ` : ''}
-                <button type="button" class="btn btn-sm btn-icon btn-info" onclick="viewInbound(${order.id})" title="详情">
-                    <i class="fas fa-eye"></i>
+                <button type="button" class="btn btn-sm btn-info" onclick="viewInbound(${order.id})">
+                    <i class="fas fa-eye"></i> 详情
                 </button>
-                <button type="button" class="btn btn-sm btn-icon btn-view" onclick="viewInboundImage(${order.id})" title="入库凭证照片">
-                    <i class="fas fa-image"></i>
+                <button type="button" class="btn btn-sm btn-info" onclick="viewInboundImage(${order.id})">
+                    <i class="fas fa-image"></i> 图片
                 </button>
                 ${showMutate ? `
-                    <button class="btn btn-sm btn-icon btn-danger" onclick="deleteInbound(${order.id})" title="删除">
-                        <i class="fas fa-trash"></i>
+                    <button class="btn btn-sm btn-danger" onclick="deleteInbound(${order.id})">
+                        <i class="fas fa-trash"></i> 删除
                     </button>
                 ` : ''}
             </td>
