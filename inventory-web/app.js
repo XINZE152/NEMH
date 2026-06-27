@@ -2552,7 +2552,7 @@ function syncInboundUnitPriceFromLatest(materialId) {
             const latest = data.latest.unitPrice;
             const fixed = Number(Number(latest).toFixed(2));
             if (hintEl) {
-                hintEl.style.color = '#1565C0';
+                hintEl.style.color = '#196cc0';
                 hintEl.textContent =
                     '规则：入库单价须与最新收货定价一致（' + fixed + ' 元/吨），已自动填入，可核对后保存。';
             }

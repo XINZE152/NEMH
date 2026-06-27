@@ -7,7 +7,7 @@
 }
 
 body {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: system-ui, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
     background-color: #f5f7fa;
     color: #333;
     line-height: 1.6;
@@ -48,7 +48,7 @@ body {
 
 .logo i {
     font-size: 48px;
-    color: #2196F3;
+    color: #196cc0;
 }
 
 /* 品牌标题两行：新能源材料 / 进销存系统 */
@@ -107,7 +107,7 @@ body {
 
 .form-group label i {
     margin-right: 8px;
-    color: #2196F3;
+    color: #196cc0;
 }
 
 .form-group input {
@@ -121,11 +121,11 @@ body {
 
 .form-group input:focus {
     outline: none;
-    border-color: #2196F3;
+    border-color: #196cc0;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #2196F3, #1976D2);
+    background: linear-gradient(135deg, #196cc0, #155a9e);
     color: white;
     border: none;
     padding: 14px 28px;
@@ -142,9 +142,9 @@ body {
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #1976D2, #1565C0);
+    background: linear-gradient(135deg, #155a9e, #155a9e);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+    box-shadow: 0 5px 15px rgba(25, 108, 192, 0.3);
 }
 
 .demo-accounts {
@@ -200,8 +200,8 @@ body {
 
 /* 应用主页面样式 */
 .app-header {
-    background: linear-gradient(135deg, #2196F3, #1976D2);
-    box-shadow: 0 2px 12px rgba(25, 118, 210, 0.35);
+    background-color: #196cc0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     padding: 0 30px;
     height: 70px;
     display: flex;
@@ -273,16 +273,49 @@ body {
 
 .nav-item.active {
     background: #fff;
-    color: #1976D2;
+    color: #155a9e;
     font-weight: 600;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.nav-item-external {
+    margin-left: auto;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 12px;
     flex-shrink: 0;
+}
+
+.header-external-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.36);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+}
+
+.header-external-link:hover {
+    background: rgba(255, 255, 255, 0.24);
+    color: #fff;
+}
+
+.header-external-link i {
+    font-size: 12px;
+    opacity: 0.9;
 }
 
 .user-info {
@@ -372,13 +405,13 @@ body {
 
 .user-info-menu-item:hover {
     background: #f5f7fa;
-    color: #1976d2;
+    color: #155a9e;
 }
 
 .user-info-menu-item i {
     width: 16px;
     text-align: center;
-    color: #2196F3;
+    color: #196cc0;
 }
 
 .user-info-menu-item--logout:hover {
@@ -649,8 +682,8 @@ body {
 }
 
 .system-admin-action-btn:hover {
-    border-color: #90caf9;
-    box-shadow: 0 8px 24px rgba(33, 150, 243, 0.12);
+    border-color: #a3c8f0;
+    box-shadow: 0 8px 24px rgba(25, 108, 192, 0.12);
     transform: translateY(-2px);
 }
 
@@ -669,8 +702,8 @@ body {
 }
 
 .system-admin-card:hover {
-    border-color: #90caf9;
-    box-shadow: 0 8px 24px rgba(33, 150, 243, 0.12);
+    border-color: #a3c8f0;
+    box-shadow: 0 8px 24px rgba(25, 108, 192, 0.12);
     transform: translateY(-2px);
 }
 
@@ -679,8 +712,8 @@ body {
     width: 48px;
     height: 48px;
     border-radius: 10px;
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #e8f1ff;
+    color: #155a9e;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -746,8 +779,8 @@ body {
 }
 
 .system-health-status.ok {
-    background: #e3f2fd;
-    color: #1565c0;
+    background: #e8f1ff;
+    color: #155a9e;
 }
 
 .system-health-status.error {
@@ -769,13 +802,13 @@ body {
     padding: 15px;
     background: #f8f9fa;
     border-radius: 8px;
-    border-left: 4px solid #2196F3;
+    border-left: 4px solid #196cc0;
     display: flex;
     gap: 15px;
 }
 
 .notice-icon {
-    color: #2196F3;
+    color: #196cc0;
     font-size: 20px;
 }
 
@@ -860,8 +893,8 @@ body {
 }
 
 .search-box-btn:hover {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #e8f1ff;
+    color: #155a9e;
 }
 
 .view-multi-img-wrap img,
@@ -1005,7 +1038,7 @@ body {
 }
 
 .data-table th.sortable-th.sort-active .sortable-th-btn {
-    color: #3498db;
+    color: #196cc0;
 }
 
 .sort-indicator {
@@ -1016,7 +1049,7 @@ body {
 
 .data-table th.sortable-th.sort-active .sort-indicator {
     opacity: 1;
-    color: #3498db;
+    color: #196cc0;
 }
 
 .data-table td {
@@ -1068,8 +1101,8 @@ body {
 }
 
 .status.approved {
-    background: #e3f2fd;
-    color: #1565C0;
+    background: #e8f1ff;
+    color: #155a9e;
 }
 
 .status.rejected {
@@ -1113,12 +1146,12 @@ body {
 }
 
 .btn-success {
-    background: #2196F3;
+    background: #196cc0;
     color: white;
 }
 
 .btn-success:hover {
-    background: #1565C0;
+    background: #155a9e;
 }
 
 .btn-info {
@@ -1175,11 +1208,11 @@ body {
 }
 
 .tab-btn:hover {
-    color: #2196F3;
+    color: #196cc0;
 }
 
 .tab-btn.active {
-    color: #2196F3;
+    color: #196cc0;
     background: white;
 }
 
@@ -1190,7 +1223,7 @@ body {
     left: 0;
     right: 0;
     height: 2px;
-    background: #2196F3;
+    background: #196cc0;
 }
 
 .tab-content {
@@ -1318,7 +1351,7 @@ body {
 }
 
 .profit-table td:nth-child(10).positive {
-    color: #2196F3;
+    color: #196cc0;
 }
 
 .profit-table td:nth-child(10).negative {
@@ -1560,7 +1593,7 @@ body {
     width: 20px;
     height: 20px;
     border: 3px solid #f3f3f3;
-    border-top: 3px solid #2196F3;
+    border-top: 3px solid #196cc0;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -1609,7 +1642,7 @@ body {
 }
 
 .form-group.success input {
-    border-color: #2196F3;
+    border-color: #196cc0;
 }
 
 /* 模态框样式：无灰底遮罩，内容居中 */
@@ -1746,10 +1779,10 @@ body {
 /* 总价显示 */
 .total-price {
     padding: 12px 16px;
-    background: #e3f2fd;
+    background: #e8f1ff;
     border-radius: 8px;
-    border: 1px solid #bbdefb;
-    color: #1565C0;
+    border: 1px solid #a3c8f0;
+    color: #155a9e;
     font-size: 18px;
     font-weight: 600;
     text-align: center;
@@ -1790,7 +1823,7 @@ body {
 .quotation-price {
     font-size: 24px;
     font-weight: 700;
-    color: #2196F3;
+    color: #196cc0;
     margin-bottom: 10px;
 }
 
@@ -1834,7 +1867,7 @@ body {
 
 .progress-bar {
     height: 100%;
-    background: linear-gradient(135deg, #2196F3, #1976D2);
+    background: linear-gradient(135deg, #196cc0, #155a9e);
     border-radius: 4px;
     transition: width 0.3s ease;
 }
@@ -1853,8 +1886,8 @@ body {
 }
 
 .badge-success {
-    background-color: #e3f2fd;
-    color: #1565C0;
+    background-color: #e8f1ff;
+    color: #155a9e;
 }
 
 .badge-warning {
@@ -1916,8 +1949,8 @@ body {
 }
 
 .message-success {
-    background: linear-gradient(135deg, #2196F3, #1976D2);
-    border-left: 4px solid #1565C0;
+    background: linear-gradient(135deg, #196cc0, #155a9e);
+    border-left: 4px solid #155a9e;
 }
 
 .message-error {
@@ -1931,8 +1964,8 @@ body {
 }
 
 .message-info {
-    background: linear-gradient(135deg, #2196F3, #1976d2);
-    border-left: 4px solid #0d47a1;
+    background: linear-gradient(135deg, #196cc0, #155a9e);
+    border-left: 4px solid #0d4a81;
 }
 
 /* 操作项样式 */
@@ -2008,7 +2041,7 @@ body {
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: #2196F3;
+    border-color: #196cc0;
 }
 
 .form-group textarea {
@@ -2073,7 +2106,7 @@ body {
 .image-upload-btn {
     display: inline-block;
     padding: 8px 16px;
-    background-color: #2196f3;
+    background-color: #196cc0;
     color: #fff;
     border: none;
     border-radius: 4px;
@@ -2083,7 +2116,7 @@ body {
 }
 
 .image-upload-btn:hover {
-    background-color: #1976d2;
+    background-color: #155a9e;
 }
 
 .image-upload-btn i {
@@ -2302,7 +2335,7 @@ body {
 }
 
 .outbound-fifo-table-wrap:focus-visible {
-    outline: 2px solid #2196f3;
+    outline: 2px solid #196cc0;
     outline-offset: 2px;
 }
 
@@ -2327,7 +2360,7 @@ body {
 .outbound-fifo-table .fifo-total-row td {
     position: sticky;
     bottom: 0;
-    background: #f0f7ff;
+    background: #edf3fa;
     box-shadow: 0 -1px 0 #e9ecef;
 }
 
@@ -2413,7 +2446,7 @@ body {
 }
 
 .workbench-panel-title i {
-    color: #2196f3;
+    color: #196cc0;
     font-size: 18px;
 }
 
@@ -2445,13 +2478,13 @@ body {
 }
 
 .workbench-entry:hover {
-    border-color: #90caf9;
-    box-shadow: 0 4px 14px rgba(33, 150, 243, 0.12);
-    background: #f8fbff;
+    border-color: #a3c8f0;
+    box-shadow: 0 4px 14px rgba(25, 108, 192, 0.12);
+    background: #e8f1ff;
 }
 
 .workbench-entry:focus-visible {
-    outline: 2px solid #2196f3;
+    outline: 2px solid #196cc0;
     outline-offset: 2px;
 }
 
@@ -2464,8 +2497,8 @@ body {
     width: 48px;
     height: 48px;
     border-radius: 10px;
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #e8f1ff;
+    color: #155a9e;
     display: flex;
     align-items: center;
     justify-content: center;

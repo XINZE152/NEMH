@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project3 样式预览 — 新能源材料进销存系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ===== 基础重置 ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        /* ===== 页面切换 ===== */
+        .page { display: none; min-height: 100vh; }
+        .page.active { display: block; }
+
+        /* ===== 顶栏导航 ===== */
+        .app-header {
+            background-color: #196cc0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            padding: 0 30px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            gap: 12px;
+        }
+        .header-left { flex-shrink: 0; max-width: 380px; min-width: 0; }
+        .header-left .logo { display: flex; align-items: center; gap: 12px; }
+        .header-left .logo i { font-size: 28px; color: #fff; flex-shrink: 0; }
+        .app-brand-title {
+            display: flex; flex-direction: column; align-items: flex-start;
+            font-weight: 700; color: #fff; line-height: 1.2; font-size: 17px;
+        }
+        .header-center { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; overflow-x: auto; }
+        .main-nav { display: flex; flex-wrap: nowrap; gap: 5px; }
+        .nav-item {
+            padding: 10px 20px; text-decoration: none;
+            color: rgba(255,255,255,0.92); font-weight: 500;
+            border-radius: 6px; transition: background 0.2s, color 0.2s;
+            display: inline-flex; align-items: center; gap: 8px;
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .nav-item.active { background: #fff; color: #196cc0; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+        .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .header-external-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            height: 34px; padding: 0 14px; border-radius: 999px;
+            font-size: 13px; font-weight: 600; color: #fff;
+            background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.36);
+            text-decoration: none; white-space: nowrap; transition: all 0.18s ease;
+        }
+        .header-external-link:hover { background: rgba(255,255,255,0.24); color: #fff; }
+        .header-external-link i { font-size: 12px; opacity: 0.9; }
+        .user-info { position: relative; display: flex; align-items: center; }
+        .user-info-inner {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 10px; margin: -6px -10px;
+            border: none; background: transparent; font: inherit;
+            color: #fff; border-radius: 8px; cursor: pointer;
+        }
+        .user-info-inner:hover { background: rgba(255,255,255,0.15); }
+        .role-badge {
+            background: rgba(255,255,255,0.22); color: #fff;
+            padding: 4px 12px; border-radius: 20px; font-size: 12px;
+            font-weight: 600; border: 1px solid rgba(255,255,255,0.35);
+        }
+
+        /* ===== 内容区域 ===== */
+        .app-main { padding: 30px; max-width: 1400px; margin: 0 auto; }
+        .content-page { display: none; }
+        .content-page.active { display: block; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ===== 登录页 ===== */
+        .login-container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; min-height: 100vh; display: flex; flex-direction: column; }
+        .login-header { text-align: center; margin-bottom: 60px; }
+        .login-header .logo { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; }
+        .login-header .logo i { font-size: 48px; color: #196cc0; }
+        .login-header .logo .app-brand-title { font-size: 28px; gap: 2px; color: #2c3e50; align-items: center; }
+        .subtitle { font-size: 18px; color: #7f8c8d; margin-top: 10px; }
+        .login-form {
+            background: white; border-radius: 12px; padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 500px;
+            margin: 0 auto; width: 100%;
+        }
+        .login-form h2 { font-size: 24px; color: #2c3e50; margin-bottom: 30px; text-align: center; }
+        .form-group { margin-bottom: 25px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; color: #555; }
+        .form-group label i { margin-right: 8px; color: #196cc0; }
+        .form-group input {
+            width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font-size: 16px; transition: border-color 0.3s;
+        }
+        .form-group input:focus { outline: none; border-color: #196cc0; }
+        .btn-primary {
+            background: linear-gradient(135deg, #196cc0, #155a9e);
+            color: white; border: none; padding: 14px 28px; border-radius: 8px;
+            font-size: 16px; font-weight: 600; cursor: pointer; width: 100%;
+            transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(25, 108, 192, 0.3);
+        }
+        .demo-accounts { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+        .demo-accounts h3 { font-size: 16px; color: #7f8c8d; margin-bottom: 15px; }
+        .account-list { display: flex; flex-direction: column; gap: 10px; }
+        .account-item {
+            background: #f8f9fa; padding: 12px 16px; border-radius: 8px;
+            cursor: pointer; transition: all 0.3s; border: 1px solid #e9ecef;
+        }
+        .account-item:hover { background: #e9ecef; transform: translateX(5px); }
+        .account-item strong { display: block; color: #2c3e50; margin-bottom: 4px; }
+        .account-item span { color: #6c757d; font-size: 14px; }
+        .login-footer { margin-top: auto; text-align: center; padding-top: 40px; color: #95a5a6; font-size: 14px; }
+
+        /* ===== 工作台 ===== */
+        .workbench-top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        .workbench-panel { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 24px 28px 28px; }
+        .workbench-panel-title { font-size: 17px; font-weight: 600; color: #2c3e50; margin: 0 0 20px; display: flex; align-items: center; gap: 10px; }
+        .workbench-panel-title i { color: #196cc0; font-size: 18px; }
+        .workbench-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .workbench-entry {
+            display: flex; align-items: flex-start; gap: 16px; width: 100%; text-align: left;
+            padding: 20px 22px; border: 1px solid #e8ecf0; border-radius: 10px;
+            background: #fff; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s; font-family: inherit;
+        }
+        .workbench-entry:hover { border-color: #a3c8f0; box-shadow: 0 4px 14px rgba(25, 108, 192, 0.12); background: #e8f1ff; }
+        .workbench-entry-icon {
+            flex-shrink: 0; width: 48px; height: 48px; border-radius: 10px;
+            background: #e8f1ff; color: #196cc0; display: flex; align-items: center; justify-content: center; font-size: 22px;
+        }
+        .workbench-entry-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .workbench-entry-title { font-size: 16px; font-weight: 600; color: #2c3e50; line-height: 1.3; }
+        .workbench-entry-desc { font-size: 13px; color: #7f8c8d; line-height: 1.45; }
+
+        /* ===== 数据表格 ===== */
+        .data-table-container { background: white; border-radius: 12px; overflow-x: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { background: #f8f9fa; padding: 16px; text-align: left; font-weight: 600; color: #555; border-bottom: 2px solid #e9ecef; white-space: nowrap; }
+        .data-table td { padding: 16px; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
+        .data-table tr:hover { background: #f8f9fa; }
+
+        /* ===== 状态徽章 ===== */
+        .status { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; }
+        .status.pending { background: #fff3cd; color: #856404; }
+        .status.approved { background: #e8f1ff; color: #155a9e; }
+        .status.rejected { background: #f8d7da; color: #721c24; }
+        .status.completed { background: #d1ecf1; color: #0c5460; }
+        .status.outbounding { background: #cce5ff; color: #004085; }
+
+        /* ===== 各类按钮 ===== */
+        .btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            border: none; padding: 10px 20px; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            font-family: inherit;
+        }
+        .btn-success { background: #196cc0; color: white; }
+        .btn-success:hover { background: #155a9e; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn-warning:hover { background: #e0a800; }
+        .btn-info { background: #17a2b8; color: #fff; }
+        .btn-info:hover { background: #138496; }
+
+        /* ===== 模态框模拟 ===== */
+        .modal-demo {
+            background: white; border-radius: 12px; padding: 0; width: 100%; max-width: 600px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.18); margin: 0 auto;
+        }
+        .modal-demo-header { padding: 20px 30px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; }
+        .modal-demo-header h3 { font-size: 20px; color: #2c3e50; display: flex; align-items: center; gap: 10px; margin: 0; }
+        .modal-demo-body { padding: 30px; }
+        .modal-demo-footer { padding: 20px 30px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 15px; }
+
+        /* ===== 仪表盘统计卡片 ===== */
+        .dashboard-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 30px; }
+        .stat-card {
+            background: white; border-radius: 12px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            display: flex; align-items: center; gap: 20px; transition: transform 0.3s;
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-icon {
+            width: 60px; height: 60px; border-radius: 12px; display: flex;
+            align-items: center; justify-content: center; color: white; font-size: 24px;
+        }
+        .stat-content h3 { font-size: 16px; color: #7f8c8d; margin-bottom: 8px; }
+        .stat-number { font-size: 32px; font-weight: 700; color: #2c3e50; line-height: 1; }
+
+        /* ===== 页面头部 ===== */
+        .page-header { margin-bottom: 30px; }
+        .page-header h1 { font-size: 22px; color: #2c3e50; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .page-header p { color: #7f8c8d; font-size: 16px; }
+
+        /* ===== 标签页 ===== */
+        .tab-container { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        .tabs { display: flex; background: #f8f9fa; border-bottom: 2px solid #e9ecef; }
+        .tab-btn {
+            padding: 15px 30px; background: none; border: none; font-size: 16px;
+            font-weight: 500; color: #666; cursor: pointer; transition: all 0.3s; position: relative; font-family: inherit;
+        }
+        .tab-btn:hover { color: #196cc0; }
+        .tab-btn.active { color: #196cc0; background: white; }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 2px; background: #196cc0; }
+        .tab-content { display: none; padding: 25px; }
+        .tab-content.active { display: block; }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 1024px) { .workbench-top-grid { grid-template-columns: 1fr; } .dashboard-stats { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) {
+            .app-header { padding: 10px 15px; height: auto; min-height: 70px; }
+            .app-main { padding: 15px; }
+        }
+
+        /* ===== 测试工具栏 ===== */
+        .test-toolbar {
+            position: fixed; bottom: 20px; right: 20px; z-index: 2000;
+            display: flex; gap: 8px;
+        }
+        .test-toolbar button {
+            padding: 10px 18px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            background: #196cc0; color: #fff; font-family: inherit;
+            box-shadow: 0 4px 12px rgba(25, 108, 192, 0.35);
+            transition: all 0.2s;
+        }
+        .test-toolbar button:hover { background: #155a9e; transform: translateY(-2px); }
+        .test-toolbar button.active { background: #155a9e; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+
+        /* ===== 消息提示 ===== */
+        .message {
+            position: fixed; top: 20px; right: 20px; padding: 15px 20px;
+            border-radius: 8px; color: white; font-weight: 500;
+            display: flex; align-items: center; gap: 10px; z-index: 2000;
+            max-width: 400px;
+        }
+        .message-success { background: linear-gradient(135deg, #196cc0, #155a9e); border-left: 4px solid #155a9e; }
+        .message-error { background: linear-gradient(135deg, #f44336, #d32f2f); border-left: 4px solid #b71c1c; }
+        .message-warning { background: linear-gradient(135deg, #ff9800, #f57c00); border-left: 4px solid #e65100; }
+    </style>
+</head>
+<body>
+
+    <!-- ========== 登录页面 ========== -->
+    <div id="login-page" class="page active">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="logo">
+                    <i class="fas fa-battery-full"></i>
+                    <h1 class="app-brand-title">
+                        <span class="app-brand-line">新能源材料</span>
+                        <span class="app-brand-line">进销存系统</span>
+                    </h1>
+                </div>
+                <p class="subtitle">精准成本核算 · 实时库存可视 · 规范协同流程</p>
+            </div>
+
+            <div class="login-form">
+                <h2>用户登录</h2>
+                <div class="form-group">
+                    <label for="username"><i class="fas fa-user"></i> 用户名</label>
+                    <input type="text" id="username" placeholder="请输入用户名" value="admin">
+                </div>
+                <div class="form-group">
+                    <label for="password"><i class="fas fa-lock"></i> 密码</label>
+                    <input type="password" id="password" placeholder="请输入密码" value="admin123">
+                </div>
+                <button class="btn-primary" onclick="switchToApp()">
+                    <i class="fas fa-sign-in-alt"></i> 登录
+                </button>
+
+                <div class="demo-accounts">
+                    <h3>登录说明</h3>
+                    <p class="subtitle" style="font-size:13px;margin:0 0 10px;">空库默认 <code>admin / admin123</code> 为<strong>超级管理员</strong>。</p>
+                    <div class="account-list">
+                        <div class="account-item" onclick="document.getElementById('username').value='admin';document.getElementById('password').value='admin123'">
+                            <strong>默认超级管理员</strong>
+                            <span>admin / admin123</span>
+                        </div>
+                        <div class="account-item" onclick="document.getElementById('username').value='statistics';document.getElementById('password').value='stat123'">
+                            <strong>演示账号（统计部）</strong>
+                            <span>statistics / stat123</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="login-footer">
+                <p>© 2023 电动/新能源材料进销存管理系统 V1.0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 主应用页面 ========== -->
+    <div id="app-page" class="page">
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i class="fas fa-battery-full"></i>
+                    <h2 class="app-brand-title">
+                        <span class="app-brand-line">新能源材料</span>
+                        <span class="app-brand-line">进销存系统</span>
+                    </h2>
+                </div>
+            </div>
+            <div class="header-center">
+                <nav class="main-nav">
+                    <a href="#" class="nav-item active"><i class="fas fa-home"></i> 进销存系统</a>
+                </nav>
+            </div>
+            <div class="header-right">
+                <a href="https://redspiderbc.cn/project2/" class="header-external-link" title="打开废铅蓄电池供应链服务系统" target="_blank">
+                    <i class="fas fa-external-link-alt"></i> 供应链服务系统
+                </a>
+                <div class="user-info">
+                    <button type="button" class="user-info-inner">
+                        <i class="fas fa-user-circle" style="font-size:24px;color:#fff;"></i>
+                        <span>管理员</span>
+                        <span class="role-badge">超级管理员</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- 页面头部 -->
+            <div class="page-header">
+                <h1><i class="fas fa-tachometer-alt"></i> 首页仪表板</h1>
+                <p>选择功能入口进入对应业务页面</p>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#196cc0;"><i class="fas fa-boxes"></i></div>
+                    <div class="stat-content">
+                        <h3>本月入库总量</h3>
+                        <div class="stat-number">1,250 <span style="font-size:14px;color:#95a5a6;">吨</span></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#FF9800;"><i class="fas fa-truck-loading"></i></div>
+                    <div class="stat-content">
+                        <h3>本月出库总量</h3>
+                        <div class="stat-number">980 <span style="font-size:14px;color:#95a5a6;">吨</span></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#9C27B0;"><i class="fas fa-chart-line"></i></div>
+                    <div class="stat-content">
+                        <h3>本月毛利</h3>
+                        <div class="stat-number">¥385,200</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#dc3545;"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-content">
+                        <h3>库存积压预警</h3>
+                        <div class="stat-number">3 <span style="font-size:14px;color:#95a5a6;">个品种</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工作台入口 -->
+            <div class="workbench-top-grid">
+                <section class="workbench-panel">
+                    <h2 class="workbench-panel-title"><i class="fas fa-tags"></i> 价格管理</h2>
+                    <div class="workbench-admin-grid">
+                        <button class="workbench-entry" onclick="showToast('功能入口：收货定价')">
+                            <div class="workbench-entry-icon"><i class="fas fa-arrow-down"></i></div>
+                            <div class="workbench-entry-text">
+                                <span class="workbench-entry-title">收货定价</span>
+                                <span class="workbench-entry-desc">设定材料收货价格</span>
+                            </div>
+                        </button>
+                        <button class="workbench-entry" onclick="showToast('功能入口：售货报价')">
+                            <div class="workbench-entry-icon"><i class="fas fa-arrow-up"></i></div>
+                            <div class="workbench-entry-text">
+                                <span class="workbench-entry-title">售货报价</span>
+                                <span class="workbench-entry-desc">发布对外市场报价</span>
+                            </div>
+                        </button>
+                    </div>
+                </section>
+                <section class="workbench-panel">
+                    <h2 class="workbench-panel-title"><i class="fas fa-warehouse"></i> 库存管理</h2>
+                    <div class="workbench-admin-grid">
+                        <button class="workbench-entry" onclick="showToast('功能入口：入库管理')">
+                            <div class="workbench-entry-icon"><i class="fas fa-dolly"></i></div>
+                            <div class="workbench-entry-text">
+                                <span class="workbench-entry-title">入库管理</span>
+                                <span class="workbench-entry-desc">录入与管理入库单</span>
+                            </div>
+                        </button>
+                        <button class="workbench-entry" onclick="showToast('功能入口：出库管理')">
+                            <div class="workbench-entry-icon"><i class="fas fa-shipping-fast"></i></div>
+                            <div class="workbench-entry-text">
+                                <span class="workbench-entry-title">出库管理</span>
+                                <span class="workbench-entry-desc">FIFO 出库分配</span>
+                            </div>
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 各类按钮展示 -->
+            <div class="workbench-panel workbench-panel-wide" style="margin-bottom:24px;">
+                <h2 class="workbench-panel-title"><i class="fas fa-palette"></i> 按钮样式一览</h2>
+                <div class="btn-row">
+                    <button class="btn-primary" style="width:auto;"><i class="fas fa-plus"></i> 主要操作</button>
+                    <button class="btn btn-success"><i class="fas fa-check"></i> 确认</button>
+                    <button class="btn btn-secondary"><i class="fas fa-times"></i> 取消</button>
+                    <button class="btn btn-danger"><i class="fas fa-trash"></i> 删除</button>
+                    <button class="btn btn-warning"><i class="fas fa-exclamation-triangle"></i> 警告</button>
+                    <button class="btn btn-info"><i class="fas fa-info-circle"></i> 信息</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-success" disabled><i class="fas fa-spinner fa-spin"></i> 处理中…</button>
+                    <button class="btn btn-secondary" disabled>已禁用</button>
+                    <button class="btn btn-danger" disabled>已禁用</button>
+                </div>
+            </div>
+
+            <!-- 状态徽章展示 -->
+            <div class="workbench-panel workbench-panel-wide" style="margin-bottom:24px;">
+                <h2 class="workbench-panel-title"><i class="fas fa-tag"></i> 状态徽章</h2>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                    <span class="status pending">待处理</span>
+                    <span class="status approved">已审核</span>
+                    <span class="status rejected">已驳回</span>
+                    <span class="status outbounding">出库中</span>
+                    <span class="status completed">已完成</span>
+                </div>
+            </div>
+
+            <!-- 数据表格展示 -->
+            <div class="workbench-panel" style="margin-bottom:24px;">
+                <h2 class="workbench-panel-title"><i class="fas fa-table"></i> 数据表格示例</h2>
+            </div>
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>单号</th>
+                            <th>仓库</th>
+                            <th>品种</th>
+                            <th>重量（吨）</th>
+                            <th>单价（元/吨）</th>
+                            <th>总金额</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>RK-20260627-0001</td>
+                            <td>华南仓</td>
+                            <td>碳酸锂</td>
+                            <td>50.00</td>
+                            <td>95,000</td>
+                            <td>¥4,750,000</td>
+                            <td><span class="status approved">已审核</span></td>
+                            <td>
+                                <button class="btn btn-success" style="padding:6px 12px;font-size:12px;"><i class="fas fa-eye"></i> 详情</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>CK-20260627-0001</td>
+                            <td>华东仓</td>
+                            <td>磷酸铁锂</td>
+                            <td>30.00</td>
+                            <td>42,000</td>
+                            <td>¥1,260,000</td>
+                            <td><span class="status outbounding">出库中</span></td>
+                            <td>
+                                <button class="btn btn-info" style="padding:6px 12px;font-size:12px;background:#17a2b8;color:#fff;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i> 编辑</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>RK-20260626-0003</td>
+                            <td>华北仓</td>
+                            <td>氢氧化锂</td>
+                            <td>20.00</td>
+                            <td>78,000</td>
+                            <td>¥1,560,000</td>
+                            <td><span class="status pending">待处理</span></td>
+                            <td>
+                                <button class="btn btn-danger" style="padding:6px 12px;font-size:12px;background:#dc3545;color:#fff;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-ban"></i> 驳回</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>CK-20260625-0002</td>
+                            <td>华南仓</td>
+                            <td>碳酸锂</td>
+                            <td>15.00</td>
+                            <td>96,000</td>
+                            <td>¥1,440,000</td>
+                            <td><span class="status completed">已完成</span></td>
+                            <td>
+                                <button class="btn btn-success" style="padding:6px 12px;font-size:12px;"><i class="fas fa-eye"></i> 详情</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 模态框模拟 -->
+            <div class="workbench-panel workbench-panel-wide" style="margin-bottom:24px;">
+                <h2 class="workbench-panel-title"><i class="fas fa-window-maximize"></i> 模态框样式预览</h2>
+                <div class="modal-demo" style="box-shadow:0 8px 32px rgba(0,0,0,0.12);">
+                    <div class="modal-demo-header">
+                        <h3><i class="fas fa-info-circle" style="color:#196cc0;"></i> 入库单详情</h3>
+                        <button style="background:none;border:none;font-size:24px;color:#95a5a6;cursor:pointer;">&times;</button>
+                    </div>
+                    <div class="modal-demo-body">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+                            <div><label style="font-weight:600;color:#555;font-size:14px;">入库单号</label><p style="font-size:16px;">RK-20260627-0001</p></div>
+                            <div><label style="font-weight:600;color:#555;font-size:14px;">仓库</label><p style="font-size:16px;">华南仓</p></div>
+                            <div><label style="font-weight:600;color:#555;font-size:14px;">品种</label><p style="font-size:16px;">碳酸锂</p></div>
+                            <div><label style="font-weight:600;color:#555;font-size:14px;">重量</label><p style="font-size:16px;font-weight:700;">50.00 吨</p></div>
+                        </div>
+                    </div>
+                    <div class="modal-demo-footer">
+                        <button class="btn btn-secondary"><i class="fas fa-times"></i> 关闭</button>
+                        <button class="btn-primary" style="width:auto;"><i class="fas fa-check"></i> 确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 标签页展示 -->
+            <div class="tab-container">
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab(this, 'tab1')">入库明细</button>
+                    <button class="tab-btn" onclick="switchTab(this, 'tab2')">出库明细</button>
+                    <button class="tab-btn" onclick="switchTab(this, 'tab3')">库存汇总</button>
+                </div>
+                <div class="tab-content active" id="tab1" style="display:block;">
+                    <p style="color:#7f8c8d;">入库明细表格在此显示（此页面为样式预览，不包含实际数据逻辑）</p>
+                </div>
+                <div class="tab-content" id="tab2">
+                    <p style="color:#7f8c8d;">出库明细表格在此显示</p>
+                </div>
+                <div class="tab-content" id="tab3">
+                    <p style="color:#7f8c8d;">库存汇总表格在此显示</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 消息 Toast 容器 -->
+    <div id="toast-container"></div>
+
+    <!-- 测试工具栏：切换页面视图 -->
+    <div class="test-toolbar">
+        <button id="btn-login-view" class="active" onclick="switchToLogin()">
+            <i class="fas fa-sign-in-alt"></i> 登录页
+        </button>
+        <button id="btn-app-view" onclick="switchToApp()">
+            <i class="fas fa-home"></i> 主应用页
+        </button>
+    </div>
+
+    <script>
+        function switchToLogin() {
+            document.getElementById('login-page').classList.add('active');
+            document.getElementById('app-page').classList.remove('active');
+            document.getElementById('btn-login-view').classList.add('active');
+            document.getElementById('btn-app-view').classList.remove('active');
+        }
+
+        function switchToApp() {
+            document.getElementById('login-page').classList.remove('active');
+            document.getElementById('app-page').classList.add('active');
+            document.getElementById('btn-login-view').classList.remove('active');
+            document.getElementById('btn-app-view').classList.add('active');
+        }
+
+        function switchTab(btn, tabId) {
+            btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            btn.closest('.tab-container').querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function showToast(msg) {
+            var toast = document.createElement('div');
+            toast.className = 'message message-success';
+            toast.innerHTML = '<i class="fas fa-check-circle"></i> ' + msg;
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+            document.body.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
