@@ -141,6 +141,30 @@ body {
     gap: 10px;
 }
 
+#add-pricing-btn,
+#add-inbound-btn,
+#btn-open-publish-quotation,
+#add-pre-outbound-btn,
+#search-report-btn {
+    padding: 10px 20px;
+    width: auto;
+    margin-right: auto;
+}
+
+#warehouse-daily-query-btn,
+#warehouse-daily-sync-rm-btn {
+    padding: 10px 20px;
+    width: auto;
+    white-space: nowrap;
+}
+
+#generate-report-btn,
+#export-report-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+    width: auto;
+}
+
 .btn-primary:hover {
     background: linear-gradient(135deg, #155a9e, #155a9e);
     transform: translateY(-2px);
@@ -234,15 +258,11 @@ body {
 }
 
 .header-left .logo .app-brand-title {
-    align-items: flex-start;
-    font-size: 17px;
-    gap: 0;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
-    flex: 1;
-    min-width: 0;
+    font-size: 20px;
     color: #fff;
+    white-space: nowrap;
+    margin: 0;
+    line-height: 1.2;
 }
 
 .main-nav {
