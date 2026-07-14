@@ -817,6 +817,9 @@ function setupEventListeners() {
 
 // 检查登录状态
 async function checkLoginStatus() {
+    // 如果 URL 携带 ?login 参数，始终停留在登录页（允许管理员直接登录）
+    var allowLoginPage = window.location.search.indexOf('login') !== -1;
+
     if (useApiMode()) {
         const token = localStorage.getItem('apiToken');
         const user = localStorage.getItem('currentUser');
@@ -866,15 +869,24 @@ async function checkLoginStatus() {
                 /* 无 P2 会话时停留在登录页 */
             }
         }
+
+        // 无有效会话且未携带 ?login → 跳转到废铅蓄电池供应链服务系统
+        if (!allowLoginPage) {
+            window.location.replace('https://redspiderbc.cn/project2/');
+        }
         return;
     }
+
+    // 离线模式
     const user = localStorage.getItem('currentUser');
     const role = localStorage.getItem('currentRole');
-    
+
     if (user && role) {
         AppState.currentUser = JSON.parse(user);
         AppState.currentRole = JSON.parse(role);
         showAppPage();
+    } else if (!allowLoginPage) {
+        window.location.replace('https://redspiderbc.cn/project2/');
     }
 }
 

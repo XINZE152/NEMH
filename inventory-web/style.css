@@ -224,18 +224,22 @@ body {
 
 /* 应用主页面样式 */
 .app-header {
-    background-color: #196cc0;
+    background-color: #f5f7fa;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     padding: 0 30px;
     height: 70px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 1000;
     gap: 12px;
     min-width: 0;
+}
+
+/* 紧凑模式：仅保留右侧用户区（无品牌标题、无导航） */
+.app-header--compact {
+    justify-content: flex-end;
 }
 
 .header-left {
@@ -353,27 +357,27 @@ body {
     border: none;
     background: transparent;
     font: inherit;
-    color: #fff;
+    color: #333;
     border-radius: 8px;
     cursor: pointer;
 }
 
 .user-info--dropdown .user-info-inner:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.06);
 }
 
 .user-info--dropdown.open .user-info-inner {
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(0, 0, 0, 0.10);
 }
 
 .user-info-inner > .fa-user-circle {
     font-size: 24px;
-    color: #fff;
+    color: #196cc0;
 }
 
 .user-info-chevron {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.85);
+    color: #888;
     display: inline-block;
     transition: transform 0.2s ease;
 }
@@ -444,8 +448,8 @@ body {
 }
 
 .role-badge {
-    background: rgba(255, 255, 255, 0.22);
-    color: #fff;
+    background: #e8f0fe;
+    color: #196cc0;
     padding: 4px 12px;
     border-radius: 20px;
     font-size: 12px;
